@@ -172,21 +172,71 @@ public:
         vertices.clear();
         indices.clear();
         
-        // Generate vertices with simple noise-based height
+        // Generate vertices with smooth multi-octave noise
         std::random_device rd;
-        std::mt19937 gen(rd());
+        std::mt19937 gen(42); // Fixed seed for consistent terrain
         std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+        
+        // Pre-generate smooth noise values using interpolated random values
+        std::vector<std::vector<float>> noiseMap(SIZE, std::vector<float>(SIZE));
+        
+        // Generate base random values at lower resolution then interpolate
+        const int noiseRes = 8; // Lower resolution for base noise
+        std::vector<std::vector<float>> baseNoise(noiseRes + 1, std::vector<float>(noiseRes + 1));
+        
+        for (int z = 0; z <= noiseRes; z++) {
+            for (int x = 0; x <= noiseRes; x++) {
+                baseNoise[x][z] = dis(gen) - 0.5f;
+            }
+        }
+        
+        // Interpolate noise values to full resolution
+        for (int z = 0; z < SIZE; z++) {
+            for (int x = 0; x < SIZE; x++) {
+                float fx = float(x) / float(SIZE - 1) * noiseRes;
+                float fz = float(z) / float(SIZE - 1) * noiseRes;
+                
+                int x1 = int(fx);
+                int z1 = int(fz);
+                int x2 = x1 + 1;
+                int z2 = z1 + 1;
+                
+                if (x2 > noiseRes) x2 = noiseRes;
+                if (z2 > noiseRes) z2 = noiseRes;
+                
+                float fracX = fx - x1;
+                float fracZ = fz - z1;
+                
+                // Bilinear interpolation for smooth transitions
+                float n1 = baseNoise[x1][z1] * (1 - fracX) + baseNoise[x2][z1] * fracX;
+                float n2 = baseNoise[x1][z2] * (1 - fracX) + baseNoise[x2][z2] * fracX;
+                noiseMap[x][z] = n1 * (1 - fracZ) + n2 * fracZ;
+            }
+        }
         
         for (int z = 0; z < SIZE; z++) {
             for (int x = 0; x < SIZE; x++) {
                 float worldX = (x - SIZE/2) * SCALE;
                 float worldZ = (z - SIZE/2) * SCALE;
                 
-                // Simple height generation using multiple octaves
+                // Multi-octave height generation for natural terrain
                 float height = 0.0f;
-                height += (dis(gen) - 0.5f) * HEIGHT_SCALE * 0.5f;
-                height += bx::sin(worldX * 0.1f) * HEIGHT_SCALE * 0.3f;
-                height += bx::cos(worldZ * 0.15f) * HEIGHT_SCALE * 0.2f;
+                
+                // Large scale rolling hills (octave 1)
+                height += noiseMap[x][z] * HEIGHT_SCALE * 0.8f;
+                
+                // Medium scale features (octave 2)
+                float mediumNoise = bx::sin(worldX * 0.05f) * bx::cos(worldZ * 0.05f);
+                height += mediumNoise * HEIGHT_SCALE * 0.3f;
+                
+                // Fine detail (octave 3)
+                float fineNoise = bx::sin(worldX * 0.2f + worldZ * 0.1f) * bx::cos(worldZ * 0.2f);
+                height += fineNoise * HEIGHT_SCALE * 0.1f;
+                
+                // Add subtle distance-based falloff for more natural edges
+                float distanceFromCenter = bx::sqrt(worldX * worldX + worldZ * worldZ);
+                float falloff = bx::clamp(1.0f - distanceFromCenter / (SIZE * SCALE * 0.4f), 0.0f, 1.0f);
+                height *= falloff * falloff; // Smooth edge falloff
                 
                 TerrainVertex vertex;
                 vertex.x = worldX;
