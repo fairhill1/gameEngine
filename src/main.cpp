@@ -425,6 +425,17 @@ private:
 public:
     ChunkManager() = default;
     
+    // Force initial chunk loading around player position
+    void forceInitialChunkLoad(float playerX, float playerZ) {
+        playerChunkX = (int)bx::floor(playerX / (TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE));
+        playerChunkZ = (int)bx::floor(playerZ / (TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE));
+        
+        std::cout << "Force loading initial chunks around player at chunk (" << playerChunkX << ", " << playerChunkZ << ")" << std::endl;
+        
+        // Load chunks in render distance
+        loadChunksAroundPlayer();
+    }
+    
     // Update chunks around player position
     void updateChunksAroundPlayer(float playerX, float playerZ) {
         // Calculate which chunk the player is in
@@ -1090,8 +1101,8 @@ int main(int argc, char* argv[]) {
     Player player;
     player.position = {0.0f, 0.0f, 0.0f}; // Will be set properly after first chunk load
     
-    // Load initial chunks around player
-    chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
+    // Force initial chunk loading around player
+    chunkManager.forceInitialChunkLoad(player.position.x, player.position.z);
     player.position.y = chunkManager.getHeightAt(0.0f, 0.0f) + player.size - 5.0f;
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
