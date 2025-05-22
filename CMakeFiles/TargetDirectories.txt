@@ -1,0 +1,3 @@
+/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles/MyFirstCppGame.dir
+/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles/edit_cache.dir
+/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.10)
+project(gltf_bin_converter)
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Include directories
+include_directories(.)
+
+# Add the executable
+add_executable(gltf_bin_converter gltf_bin_converter.cpp)
+
+# Find required dependencies if needed
+# For this simple converter, we're assuming tiny_gltf.h is in the same directory
+
+# Set output directory to the build directory
+set_target_properties(gltf_bin_converter PROPERTIES 
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# Installation rules (optional)
+install(TARGETS gltf_bin_converter DESTINATION bin)
