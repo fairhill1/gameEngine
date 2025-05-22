@@ -508,6 +508,62 @@ void render_object_at_position(bgfx::VertexBufferHandle vbh, bgfx::IndexBufferHa
                               bgfx::ProgramHandle program, bgfx::TextureHandle texture, 
                               bgfx::UniformHandle texUniform, const float* modelMatrix);
 
+// Resource node system
+enum class ResourceType {
+    COPPER,
+    IRON,
+    STONE
+};
+
+struct ResourceNode {
+    bx::Vec3 position;
+    ResourceType type;
+    int health;
+    int maxHealth;
+    float size;
+    bool isActive;
+    
+    ResourceNode(float x, float y, float z, ResourceType resourceType, int hp = 100) 
+        : position({x, y, z}), type(resourceType), health(hp), maxHealth(hp), size(0.5f), isActive(true) {}
+    
+    bool canMine() const {
+        return isActive && health > 0;
+    }
+    
+    int mine(int damage = 25) {
+        if (!canMine()) return 0;
+        
+        health -= damage;
+        std::cout << "Mining " << getResourceName() << " - Health: " << health << "/" << maxHealth << std::endl;
+        
+        if (health <= 0) {
+            health = 0;
+            isActive = false;
+            std::cout << getResourceName() << " node depleted! Gained 1 " << getResourceName() << std::endl;
+            return 1; // Return resource gained
+        }
+        return 0;
+    }
+    
+    const char* getResourceName() const {
+        switch (type) {
+            case ResourceType::COPPER: return "Copper";
+            case ResourceType::IRON: return "Iron";
+            case ResourceType::STONE: return "Stone";
+            default: return "Unknown";
+        }
+    }
+    
+    uint32_t getColor() const {
+        switch (type) {
+            case ResourceType::COPPER: return 0xff4A90E2; // Orange-brown for copper
+            case ResourceType::IRON: return 0xff808080;   // Gray for iron
+            case ResourceType::STONE: return 0xff606060;  // Dark gray for stone
+            default: return 0xffffffff;
+        }
+    }
+};
+
 // Chunk management system
 class ChunkManager {
 public:
@@ -515,6 +571,7 @@ public:
     
 private:
     std::unordered_map<uint64_t, std::unique_ptr<TerrainChunk>> loadedChunks;
+    std::vector<ResourceNode>* worldResourceNodes; // Pointer to global resource nodes
     int playerChunkX = 0;
     int playerChunkZ = 0;
     
@@ -545,8 +602,141 @@ private:
         return BiomeType::MOUNTAINS;
     }
     
+    // Generate procedural resource nodes for a chunk
+    void generateResourcesForChunk(int chunkX, int chunkZ) {
+        if (!worldResourceNodes) return;
+        
+        BiomeType chunkBiome = getBiomeForChunk(chunkX, chunkZ);
+        
+        // World coordinates for this chunk
+        float chunkWorldX = chunkX * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+        float chunkWorldZ = chunkZ * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+        
+        // Generate resource nodes based on biome
+        int nodeCount = 0;
+        float density = 0.3f; // Base density
+        
+        // Biome-specific resource generation
+        switch (chunkBiome) {
+            case BiomeType::MOUNTAINS:
+                // Mountains have iron and stone
+                density = 0.5f; // Higher density in mountains
+                for (int attempts = 0; attempts < 8; attempts++) {
+                    float seed = (chunkX * 73.0f + chunkZ * 47.0f + attempts * 23.0f);
+                    float noiseValue = bx::sin(seed * 0.1f) * bx::cos(seed * 0.13f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.7f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.8f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        ResourceType resourceType = (bx::sin(seed * 0.9f) > 0.0f) ? ResourceType::IRON : ResourceType::STONE;
+                        float worldY = getHeightAt(worldX, worldZ) + 0.5f - 5.0f;
+                        
+                        worldResourceNodes->emplace_back(worldX, worldY, worldZ, resourceType, 100);
+                        nodeCount++;
+                    }
+                }
+                break;
+                
+            case BiomeType::DESERT:
+                // Desert has copper and stone
+                density = 0.25f;
+                for (int attempts = 0; attempts < 6; attempts++) {
+                    float seed = (chunkX * 67.0f + chunkZ * 53.0f + attempts * 29.0f);
+                    float noiseValue = bx::sin(seed * 0.15f) * bx::cos(seed * 0.11f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.6f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.7f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        ResourceType resourceType = (bx::sin(seed * 0.8f) > 0.2f) ? ResourceType::COPPER : ResourceType::STONE;
+                        float worldY = getHeightAt(worldX, worldZ) + 0.5f - 5.0f;
+                        
+                        worldResourceNodes->emplace_back(worldX, worldY, worldZ, resourceType, 100);
+                        nodeCount++;
+                    }
+                }
+                break;
+                
+            case BiomeType::GRASSLAND:
+                // Grassland has balanced resources
+                density = 0.35f;
+                for (int attempts = 0; attempts < 7; attempts++) {
+                    float seed = (chunkX * 71.0f + chunkZ * 41.0f + attempts * 31.0f);
+                    float noiseValue = bx::sin(seed * 0.12f) * bx::cos(seed * 0.14f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.65f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.75f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        // Balanced distribution of all resource types
+                        float typeNoise = bx::sin(seed * 1.1f);
+                        ResourceType resourceType;
+                        if (typeNoise < -0.3f) resourceType = ResourceType::COPPER;
+                        else if (typeNoise < 0.3f) resourceType = ResourceType::IRON;
+                        else resourceType = ResourceType::STONE;
+                        
+                        float worldY = getHeightAt(worldX, worldZ) + 0.5f - 5.0f;
+                        
+                        worldResourceNodes->emplace_back(worldX, worldY, worldZ, resourceType, 100);
+                        nodeCount++;
+                    }
+                }
+                break;
+                
+            case BiomeType::SWAMP:
+                // Swamp has mainly iron and occasional stone
+                density = 0.2f; // Lower density in swamps
+                for (int attempts = 0; attempts < 5; attempts++) {
+                    float seed = (chunkX * 61.0f + chunkZ * 59.0f + attempts * 37.0f);
+                    float noiseValue = bx::sin(seed * 0.18f) * bx::cos(seed * 0.09f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.55f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.85f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        ResourceType resourceType = (bx::sin(seed * 1.2f) > 0.4f) ? ResourceType::IRON : ResourceType::STONE;
+                        float worldY = getHeightAt(worldX, worldZ) + 0.5f - 5.0f;
+                        
+                        worldResourceNodes->emplace_back(worldX, worldY, worldZ, resourceType, 100);
+                        nodeCount++;
+                    }
+                }
+                break;
+        }
+        
+        if (nodeCount > 0) {
+            std::cout << "Generated " << nodeCount << " resource nodes in " 
+                      << getBiomeName(chunkBiome) << " chunk (" << chunkX << ", " << chunkZ << ")" << std::endl;
+        }
+    }
+    
+    // Helper function to get biome name
+    const char* getBiomeName(BiomeType biome) const {
+        switch (biome) {
+            case BiomeType::DESERT: return "Desert";
+            case BiomeType::MOUNTAINS: return "Mountains";
+            case BiomeType::SWAMP: return "Swamp";
+            case BiomeType::GRASSLAND: return "Grassland";
+            default: return "Unknown";
+        }
+    }
+    
 public:
     ChunkManager() = default;
+    
+    // Set pointer to global resource nodes vector
+    void setResourceNodesPointer(std::vector<ResourceNode>* nodes) {
+        worldResourceNodes = nodes;
+    }
     
     // Force initial chunk loading around player position
     void forceInitialChunkLoad(float playerX, float playerZ) {
@@ -681,6 +871,9 @@ private:
                     chunk->createBuffers();
                     
                     loadedChunks[key] = std::move(chunk);
+                    
+                    // Generate resource nodes for this new chunk
+                    generateResourcesForChunk(x, z);
                 } else {
                     std::cout << "  Chunk (" << x << ", " << z << ") already exists" << std::endl;
                 }
@@ -751,62 +944,6 @@ struct Player {
                 position.z += direction.z * currentSpeed;
                 position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
             }
-        }
-    }
-};
-
-// Resource node system
-enum class ResourceType {
-    COPPER,
-    IRON,
-    STONE
-};
-
-struct ResourceNode {
-    bx::Vec3 position;
-    ResourceType type;
-    int health;
-    int maxHealth;
-    float size;
-    bool isActive;
-    
-    ResourceNode(float x, float y, float z, ResourceType resourceType, int hp = 100) 
-        : position({x, y, z}), type(resourceType), health(hp), maxHealth(hp), size(0.5f), isActive(true) {}
-    
-    bool canMine() const {
-        return isActive && health > 0;
-    }
-    
-    int mine(int damage = 25) {
-        if (!canMine()) return 0;
-        
-        health -= damage;
-        std::cout << "Mining " << getResourceName() << " - Health: " << health << "/" << maxHealth << std::endl;
-        
-        if (health <= 0) {
-            health = 0;
-            isActive = false;
-            std::cout << getResourceName() << " node depleted! Gained 1 " << getResourceName() << std::endl;
-            return 1; // Return resource gained
-        }
-        return 0;
-    }
-    
-    const char* getResourceName() const {
-        switch (type) {
-            case ResourceType::COPPER: return "Copper";
-            case ResourceType::IRON: return "Iron";
-            case ResourceType::STONE: return "Stone";
-            default: return "Unknown";
-        }
-    }
-    
-    uint32_t getColor() const {
-        switch (type) {
-            case ResourceType::COPPER: return 0xff4A90E2; // Orange-brown for copper
-            case ResourceType::IRON: return 0xff808080;   // Gray for iron
-            case ResourceType::STONE: return 0xff606060;  // Dark gray for stone
-            default: return 0xffffffff;
         }
     }
 };
@@ -1397,21 +1534,17 @@ int main(int argc, char* argv[]) {
     // Create debug overlay
     DebugOverlay debugOverlay;
     
-    // Create resource nodes for testing
+    // Create resource nodes vector (will be populated by procedural generation)
     std::vector<ResourceNode> resourceNodes;
-    // Add copper node near spawn for testing
-    resourceNodes.emplace_back(3.0f, 0.0f, 3.0f, ResourceType::COPPER, 100);
     
-    // Force initial chunk loading around player
+    // Connect ChunkManager to resource nodes for procedural generation
+    chunkManager.setResourceNodesPointer(&resourceNodes);
+    
+    // Force initial chunk loading around player (this will generate resources)
     chunkManager.forceInitialChunkLoad(player.position.x, player.position.z);
     player.position.y = chunkManager.getHeightAt(0.0f, 0.0f) + player.size - 5.0f;
     
-    // Position resource nodes on terrain
-    for (auto& node : resourceNodes) {
-        node.position.y = chunkManager.getHeightAt(node.position.x, node.position.z) + node.size - 5.0f;
-        std::cout << "Placed " << node.getResourceName() << " node at (" 
-                  << node.position.x << ", " << node.position.y << ", " << node.position.z << ")" << std::endl;
-    }
+    std::cout << "Initial world generation complete. Total resource nodes: " << resourceNodes.size() << std::endl;
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
     std::cout << "WASD - Move camera" << std::endl;
