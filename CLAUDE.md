@@ -34,7 +34,7 @@ CMakeLists.txt        # Build configuration
 1. **Colored Cube** (left) - Vertex color demonstration
 2. **Procedural Textured Cube** (right) - Generated sandy texture
 3. **PNG Textured Cube** (top) - Loaded high-res texture
-4. **Test Square** (bottom) - Model system validation
+4. **Garden Lamp Model** (center) - Working glTF model with proper vertex parsing
 
 ## Unified Rendering Architecture
 
@@ -60,10 +60,49 @@ CMakeLists.txt        # Build configuration
 - **ESC** - Exit
 
 ## Known Issues
-1. **Complex Model Loading**: Garden lamp and Spartan models show vertex parsing bugs (all vertices read as same position)
+1. **Texture Coordinates**: Complex models may show incorrect textures due to default UV coordinates (0,0) instead of reading actual glTF texture coords
 2. **Texture Debugging**: Verbose debug output in model.cpp (can be disabled)
 
 ## Development Notes
+
+### Critical glTF Parsing Lessons Learned
+**IMPORTANT**: When debugging model loading issues:
+
+1. **CRITICAL - Buffer Memory Management**: Always use `bgfx::copy()` for vertex and index buffers, never `bgfx::makeRef()`:
+   ```cpp
+   // WRONG - causes memory corruption and intermittent failures:
+   bgfx::createVertexBuffer(bgfx::makeRef(vertices.data(), size), layout);
+   
+   // CORRECT - prevents use-after-free bugs:
+   const bgfx::Memory* mem = bgfx::copy(vertices.data(), size);
+   bgfx::createVertexBuffer(mem, layout);
+   ```
+   **Symptom**: Model renders correctly "sometimes" but breaks randomly without code changes
+
+2. **Buffer Layout Types**: Check if glTF uses separate or interleaved buffer views:
+   - **Separate**: Position, Normal, TexCoord in different buffer views (stride = component size)
+   - **Interleaved**: All attributes mixed in same buffer (stride > component size)
+   - Use `bufferView.byteStride` to detect: stride=0 means tightly packed separate buffers
+
+3. **Buffer Stride Handling**: For separate buffer views, use component size as stride:
+   ```cpp
+   // For separate buffer views (byteStride=0):
+   size_t stride = 12; // 3 floats for position
+   size_t offset = bufferView.byteOffset + accessor.byteOffset + i * stride;
+   ```
+
+4. **Vertex Debugging**: If all vertices read as same position, check buffer stride calculation
+
+5. **glTF Component Types**: 
+   - componentType=5126 = FLOAT
+   - type=3 = VEC3 (position)
+   - byteStride=0 means "tightly packed"
+
+6. **Common Symptoms**:
+   - **Intermittent loading** = memory corruption (use bgfx::copy())
+   - Stretched/deformed models = vertex format mismatch with shaders
+   - All vertices same position = buffer stride calculation bug
+   - Missing textures = UV coordinate reading issue
 
 ### Testing Changes
 ```bash

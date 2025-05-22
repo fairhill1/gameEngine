@@ -224,7 +224,7 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 continue;
             }
             
-            // Get accessors and data
+            // Get position accessor and data
             const tinygltf::Accessor& positionAccessor = gltfModel.accessors[positionIt->second];
             const tinygltf::BufferView& positionView = gltfModel.bufferViews[positionAccessor.bufferView];
             const tinygltf::Buffer& positionBuffer = gltfModel.buffers[positionView.buffer];
@@ -232,32 +232,71 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
             // Debug buffer layout
             fprintf(stderr, "BUFFER_DEBUG: Position accessor count=%zu, componentType=%d, type=%d\n", 
                    positionAccessor.count, positionAccessor.componentType, positionAccessor.type);
-            fprintf(stderr, "BUFFER_DEBUG: BufferView byteOffset=%zu, byteLength=%zu, byteStride=%d\n",
+            fprintf(stderr, "BUFFER_DEBUG: Position BufferView byteOffset=%zu, byteLength=%zu, byteStride=%zu\n",
                    positionView.byteOffset, positionView.byteLength, positionView.byteStride);
-            fprintf(stderr, "BUFFER_DEBUG: Accessor byteOffset=%zu\n", positionAccessor.byteOffset);
+            fprintf(stderr, "BUFFER_DEBUG: Position Accessor byteOffset=%zu\n", positionAccessor.byteOffset);
             
-            // Prepare vertex data
+            // This model uses separate buffer views - positions are tightly packed
+            fprintf(stderr, "BUFFER_DEBUG: Using separate buffer views (not interleaved)\n");
+            
+            // Prepare vertex data with proper initialization
             size_t vertexCount = positionAccessor.count;
             std::vector<PosNormalTexcoordVertex> vertices(vertexCount);
             
-            // Extract position data with proper stride handling
-            size_t stride = positionView.byteStride > 0 ? positionView.byteStride : 12; // Default to 3 floats
-            
+            // Initialize all vertices to safe defaults
             for (size_t i = 0; i < vertexCount; i++) {
-                size_t offset = positionView.byteOffset + positionAccessor.byteOffset + i * stride;
-                const float* pos = reinterpret_cast<const float*>(&positionBuffer.data[offset]);
+                vertices[i].position[0] = 0.0f;
+                vertices[i].position[1] = 0.0f;
+                vertices[i].position[2] = 0.0f;
+                vertices[i].texcoord[0] = 0.0f;
+                vertices[i].texcoord[1] = 0.0f;
+            }
+            
+            // Extract position data from separate buffer view (tightly packed)
+            for (size_t i = 0; i < vertexCount; i++) {
+                // For separate buffer views, positions are tightly packed (3 floats per vertex)
+                size_t offset = positionView.byteOffset + positionAccessor.byteOffset + i * 12;
                 
-                // Store position data with scaling applied directly to vertex positions
-                const float scaleFactor = 1.0f;
-                vertices[i].position[0] = pos[0] * scaleFactor;
-                vertices[i].position[1] = pos[1] * scaleFactor;
-                vertices[i].position[2] = pos[2] * scaleFactor;
-                
-                // Debug: Print first few vertices and their raw data
-                if (i < 5) {
-                    fprintf(stderr, "VERTEX_DEBUG: Vertex %zu: offset=%zu, raw=(%.6f, %.6f, %.6f), final=(%.3f, %.3f, %.3f)\n", 
-                           i, offset, pos[0], pos[1], pos[2],
-                           vertices[i].position[0], vertices[i].position[1], vertices[i].position[2]);
+                // Bounds checking to prevent memory corruption
+                if (offset + 12 <= positionBuffer.data.size()) {
+                    const float* pos = reinterpret_cast<const float*>(&positionBuffer.data[offset]);
+                    
+                    // Store position data with scaling applied directly to vertex positions
+                    const float scaleFactor = 1.0f;
+                    vertices[i].position[0] = pos[0] * scaleFactor;
+                    vertices[i].position[1] = pos[1] * scaleFactor;
+                    vertices[i].position[2] = pos[2] * scaleFactor;
+                    
+                    // Debug: Print first few vertices and their raw data + hex dump
+                    if (i < 5) {
+                        const uint8_t* bytes = &positionBuffer.data[offset];
+                        fprintf(stderr, "VERTEX_DEBUG: Vertex %zu: offset=%zu, hex=[%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x], raw=(%.6f, %.6f, %.6f)\n", 
+                               i, offset,
+                               bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], 
+                               bytes[6], bytes[7], bytes[8], bytes[9], bytes[10], bytes[11],
+                               pos[0], pos[1], pos[2]);
+                    }
+                    
+                    // Additional debug: Sample vertices at different points
+                    if (i == 4 && vertexCount > 100) {
+                        // Sample vertices at 25%, 50%, 75% through the buffer
+                        size_t testIndices[] = {vertexCount/4, vertexCount/2, vertexCount*3/4};
+                        for (int j = 0; j < 3; j++) {
+                            size_t testOffset = positionView.byteOffset + positionAccessor.byteOffset + testIndices[j] * 12;
+                            if (testOffset + 12 <= positionBuffer.data.size()) {
+                                const float* testPos = reinterpret_cast<const float*>(&positionBuffer.data[testOffset]);
+                                fprintf(stderr, "VERTEX_DEBUG: Sample vertex %zu: offset=%zu, raw=(%.6f, %.6f, %.6f)\n", 
+                                       testIndices[j], testOffset, testPos[0], testPos[1], testPos[2]);
+                            }
+                        }
+                    }
+                } else {
+                    // Safe fallback for out-of-bounds access
+                    vertices[i].position[0] = 0.0f;
+                    vertices[i].position[1] = 0.0f;
+                    vertices[i].position[2] = 0.0f;
+                    fprintf(stderr, "ERROR: Position buffer bounds exceeded at vertex %zu, offset=%zu, buffer_size=%zu\n", 
+                           i, offset, positionBuffer.data.size());
                 }
                 
                 // Default texture coordinates
@@ -267,25 +306,43 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
             
             // Skip normal processing for now
             
-            // Extract texture coordinates if available
+            // Extract texture coordinates from separate buffer view if available
             if (texcoordIt != primitive.attributes.end()) {
                 const tinygltf::Accessor& texcoordAccessor = gltfModel.accessors[texcoordIt->second];
                 const tinygltf::BufferView& texcoordView = gltfModel.bufferViews[texcoordAccessor.bufferView];
                 const tinygltf::Buffer& texcoordBuffer = gltfModel.buffers[texcoordView.buffer];
                 
+                fprintf(stderr, "TEXCOORD_DEBUG: BufferView byteOffset=%zu, byteLength=%zu, accessor count=%zu\n",
+                       texcoordView.byteOffset, texcoordView.byteLength, texcoordAccessor.count);
+                
+                // For separate buffer views, texture coordinates are tightly packed (2 floats per vertex)
                 for (size_t i = 0; i < vertexCount; i++) {
                     size_t offset = texcoordView.byteOffset + texcoordAccessor.byteOffset + i * 8;
-                    const float* texcoord = reinterpret_cast<const float*>(&texcoordBuffer.data[offset]);
                     
-                    // Use floating point UVs directly
-                    vertices[i].texcoord[0] = texcoord[0];
-                    vertices[i].texcoord[1] = texcoord[1];
+                    // Bounds checking to prevent memory corruption
+                    if (offset + 8 <= texcoordBuffer.data.size()) {
+                        const float* texcoord = reinterpret_cast<const float*>(&texcoordBuffer.data[offset]);
+                        vertices[i].texcoord[0] = texcoord[0];
+                        vertices[i].texcoord[1] = texcoord[1];
+                        
+                        // Debug first few texture coordinates
+                        if (i < 3) {
+                            fprintf(stderr, "TEXCOORD_DEBUG: Vertex %zu: UV=(%.6f, %.6f)\n", 
+                                   i, texcoord[0], texcoord[1]);
+                        }
+                    } else {
+                        // Safe fallback for out-of-bounds access
+                        vertices[i].texcoord[0] = 0.0f;
+                        vertices[i].texcoord[1] = 0.0f;
+                        fprintf(stderr, "WARNING: Texture coordinate buffer bounds exceeded at vertex %zu\n", i);
+                    }
                 }
             }
             
-            // Create vertex buffer
+            // Create vertex buffer with proper memory copy to prevent corruption
+            const bgfx::Memory* vertexMem = bgfx::copy(vertices.data(), vertices.size() * sizeof(PosNormalTexcoordVertex));
             modelMesh.vertexBuffer = bgfx::createVertexBuffer(
-                bgfx::makeRef(vertices.data(), vertices.size() * sizeof(PosNormalTexcoordVertex)),
+                vertexMem,
                 PosNormalTexcoordVertex::ms_layout
             );
             
@@ -295,29 +352,80 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 const tinygltf::BufferView& indexView = gltfModel.bufferViews[indexAccessor.bufferView];
                 const tinygltf::Buffer& indexBuffer = gltfModel.buffers[indexView.buffer];
                 
+                fprintf(stderr, "INDEX_DEBUG: Index accessor count=%zu, componentType=%d\n", 
+                       indexAccessor.count, indexAccessor.componentType);
+                fprintf(stderr, "INDEX_DEBUG: Index BufferView byteOffset=%zu, byteLength=%zu\n",
+                       indexView.byteOffset, indexView.byteLength);
+                fprintf(stderr, "INDEX_DEBUG: Primitive mode=%d (4=TRIANGLES, 0=POINTS, 1=LINES)\n", primitive.mode);
+                
                 modelMesh.indexCount = indexAccessor.count;
                 std::vector<uint16_t> indices(modelMesh.indexCount);
                 
-                // Handle different index types
+                // Handle different index types with bounds checking
                 if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
                     // Already uint16_t
                     for (size_t i = 0; i < modelMesh.indexCount; i++) {
                         size_t offset = indexView.byteOffset + indexAccessor.byteOffset + i * 2;
-                        indices[i] = *reinterpret_cast<const uint16_t*>(&indexBuffer.data[offset]);
+                        if (offset + 2 <= indexBuffer.data.size()) {
+                            uint16_t index = *reinterpret_cast<const uint16_t*>(&indexBuffer.data[offset]);
+                            if (index < vertexCount) {
+                                indices[i] = index;
+                                // Debug first few indices and their corresponding vertices
+                                if (i < 15) {
+                                    fprintf(stderr, "INDEX_DEBUG: Index %zu = %u\n", i, index);
+                                    if (i < 9) { // First 3 triangles
+                                        // Check if this vertex was already processed
+                                        if (index < vertices.size()) {
+                                            fprintf(stderr, "INDEX_DEBUG: Vertex %u position: (%.6f, %.6f, %.6f)\n", 
+                                                   index, vertices[index].position[0], vertices[index].position[1], vertices[index].position[2]);
+                                        }
+                                    }
+                                }
+                            } else {
+                                fprintf(stderr, "WARNING: Index %u exceeds vertex count %zu at position %zu\n", 
+                                       index, vertexCount, i);
+                                indices[i] = 0; // Safe fallback
+                            }
+                        } else {
+                            fprintf(stderr, "ERROR: Index buffer bounds exceeded at position %zu\n", i);
+                            indices[i] = 0;
+                        }
                     }
                 } else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
                     // Convert uint32_t to uint16_t
                     for (size_t i = 0; i < modelMesh.indexCount; i++) {
                         size_t offset = indexView.byteOffset + indexAccessor.byteOffset + i * 4;
-                        uint32_t index = *reinterpret_cast<const uint32_t*>(&indexBuffer.data[offset]);
-                        indices[i] = static_cast<uint16_t>(index);
+                        if (offset + 4 <= indexBuffer.data.size()) {
+                            uint32_t index = *reinterpret_cast<const uint32_t*>(&indexBuffer.data[offset]);
+                            if (index < vertexCount && index <= UINT16_MAX) {
+                                indices[i] = static_cast<uint16_t>(index);
+                            } else {
+                                fprintf(stderr, "WARNING: Index %u exceeds limits (vertex count %zu, max %u) at position %zu\n", 
+                                       index, vertexCount, UINT16_MAX, i);
+                                indices[i] = 0; // Safe fallback
+                            }
+                        } else {
+                            fprintf(stderr, "ERROR: Index buffer bounds exceeded at position %zu\n", i);
+                            indices[i] = 0;
+                        }
                     }
                 } else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
                     // Convert uint8_t to uint16_t
                     for (size_t i = 0; i < modelMesh.indexCount; i++) {
                         size_t offset = indexView.byteOffset + indexAccessor.byteOffset + i;
-                        uint8_t index = indexBuffer.data[offset];
-                        indices[i] = static_cast<uint16_t>(index);
+                        if (offset < indexBuffer.data.size()) {
+                            uint8_t index = indexBuffer.data[offset];
+                            if (index < vertexCount) {
+                                indices[i] = static_cast<uint16_t>(index);
+                            } else {
+                                fprintf(stderr, "WARNING: Index %u exceeds vertex count %zu at position %zu\n", 
+                                       index, vertexCount, i);
+                                indices[i] = 0; // Safe fallback
+                            }
+                        } else {
+                            fprintf(stderr, "ERROR: Index buffer bounds exceeded at position %zu\n", i);
+                            indices[i] = 0;
+                        }
                     }
                 } else {
                     std::cerr << "Unsupported index type: " << indexAccessor.componentType << std::endl;
@@ -327,10 +435,9 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 // Set primitive type
                 modelMesh.primitiveType = primitive.mode;
                 
-                // Create index buffer
-                modelMesh.indexBuffer = bgfx::createIndexBuffer(
-                    bgfx::makeRef(indices.data(), indices.size() * sizeof(uint16_t))
-                );
+                // Create index buffer with proper memory copy to prevent corruption
+                const bgfx::Memory* indexMem = bgfx::copy(indices.data(), indices.size() * sizeof(uint16_t));
+                modelMesh.indexBuffer = bgfx::createIndexBuffer(indexMem);
             } else {
                 // No indices, create sequential indices
                 std::vector<uint16_t> indices(vertexCount);
@@ -340,9 +447,8 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 
                 modelMesh.indexCount = indices.size();
                 modelMesh.primitiveType = primitive.mode;
-                modelMesh.indexBuffer = bgfx::createIndexBuffer(
-                    bgfx::makeRef(indices.data(), indices.size() * sizeof(uint16_t))
-                );
+                const bgfx::Memory* indexMem = bgfx::copy(indices.data(), indices.size() * sizeof(uint16_t));
+                modelMesh.indexBuffer = bgfx::createIndexBuffer(indexMem);
             }
             
             // Load texture if available
