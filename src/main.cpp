@@ -328,7 +328,7 @@ int main(int argc, char* argv[]) {
     Model::init();
     
     // Create models
-    Model spartanModel;
+    Model gardenLampModel;
     
     // Create window
     std::cout << "Creating window..." << std::endl;
@@ -422,14 +422,14 @@ int main(int argc, char* argv[]) {
     // Create texture uniforms
     bgfx::UniformHandle s_texColor = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
     
-    // Load the Spartan GLB model
-    std::cout << "Loading Spartan GLB model..." << std::endl;
-    const char* modelPath = "assets/spartan_halo.glb";
-    if (!spartanModel.loadFromFile(modelPath)) {
-        std::cerr << "Failed to load Spartan model!" << std::endl;
+    // Load the Garden Lamp GLB model with detailed debugging
+    std::cout << "Loading Garden Lamp GLB model with buffer debugging..." << std::endl;
+    const char* modelPath = "assets/low-poly-garden-lamp-stylized-outdoor-light/source/garden lamp 1.glb";
+    if (!gardenLampModel.loadFromFile(modelPath)) {
+        std::cerr << "Failed to load Garden Lamp model!" << std::endl;
     } else {
-        std::cout << "Spartan model loaded successfully!" << std::endl;
-        spartanModel.setFallbackTexture(proceduralTexture);
+        std::cout << "Garden Lamp model loaded successfully!" << std::endl;
+        gardenLampModel.setFallbackTexture(proceduralTexture);
     }
     
     // Load shaders
@@ -672,18 +672,18 @@ int main(int argc, char* argv[]) {
             render_object_at_position(texVbh, texIbh, texProgram, pngTexture, s_texColor, pngTexMtx);
         }
         
-        // Render the Spartan model (if loaded)
-        if (spartanModel.hasAnyMeshes()) {
+        // Render the Garden Lamp model with debugging
+        if (gardenLampModel.hasAnyMeshes()) {
             float modelMatrix[16], scale[16], temp[16];
             bx::mtxIdentity(modelMatrix);
-            bx::mtxScale(scale, 0.05f, 0.05f, 0.05f);
+            bx::mtxScale(scale, 2.0f, 2.0f, 2.0f);  // Reasonable scale
             bx::mtxRotateY(rotation, time * 0.5f);
-            bx::mtxTranslate(translation, 5.0f, -1.0f, 0.0f);
+            bx::mtxTranslate(translation, 0.0f, -1.0f, 0.0f);  // Slightly below center
             
             bx::mtxMul(temp, scale, rotation);
             bx::mtxMul(modelMatrix, temp, translation);
             
-            spartanModel.render(texProgram, s_texColor, modelMatrix);
+            gardenLampModel.render(texProgram, s_texColor, modelMatrix);
         }
         
         bgfx::frame();
@@ -704,7 +704,7 @@ int main(int argc, char* argv[]) {
     bgfx::destroy(texVsh);
     bgfx::destroy(texFsh);
     
-    spartanModel.unload();
+    gardenLampModel.unload();
     
     bgfx::shutdown();
     SDL_DestroyWindow(window);

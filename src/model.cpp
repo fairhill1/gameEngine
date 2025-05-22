@@ -229,42 +229,43 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
             const tinygltf::BufferView& positionView = gltfModel.bufferViews[positionAccessor.bufferView];
             const tinygltf::Buffer& positionBuffer = gltfModel.buffers[positionView.buffer];
             
+            // Debug buffer layout
+            fprintf(stderr, "BUFFER_DEBUG: Position accessor count=%zu, componentType=%d, type=%d\n", 
+                   positionAccessor.count, positionAccessor.componentType, positionAccessor.type);
+            fprintf(stderr, "BUFFER_DEBUG: BufferView byteOffset=%zu, byteLength=%zu, byteStride=%d\n",
+                   positionView.byteOffset, positionView.byteLength, positionView.byteStride);
+            fprintf(stderr, "BUFFER_DEBUG: Accessor byteOffset=%zu\n", positionAccessor.byteOffset);
+            
             // Prepare vertex data
             size_t vertexCount = positionAccessor.count;
             std::vector<PosNormalTexcoordVertex> vertices(vertexCount);
             
-            // Extract position data
+            // Extract position data with proper stride handling
+            size_t stride = positionView.byteStride > 0 ? positionView.byteStride : 12; // Default to 3 floats
+            
             for (size_t i = 0; i < vertexCount; i++) {
-                size_t offset = positionView.byteOffset + positionAccessor.byteOffset + i * 12; // 3 floats * 4 bytes
+                size_t offset = positionView.byteOffset + positionAccessor.byteOffset + i * stride;
                 const float* pos = reinterpret_cast<const float*>(&positionBuffer.data[offset]);
                 
                 // Store position data with scaling applied directly to vertex positions
-                // Apply a moderate scale factor to make the model smaller
-                const float scaleFactor = 0.01f;
+                const float scaleFactor = 1.0f;
                 vertices[i].position[0] = pos[0] * scaleFactor;
                 vertices[i].position[1] = pos[1] * scaleFactor;
                 vertices[i].position[2] = pos[2] * scaleFactor;
                 
-                // Default values
-                vertices[i].normal = encodeNormalRgba8(0.0f, 1.0f, 0.0f); // Default normal (0,1,0)
-                vertices[i].texcoord[0] = 0; // Default UV (0,0)
-                vertices[i].texcoord[1] = 0;
+                // Debug: Print first few vertices and their raw data
+                if (i < 5) {
+                    fprintf(stderr, "VERTEX_DEBUG: Vertex %zu: offset=%zu, raw=(%.6f, %.6f, %.6f), final=(%.3f, %.3f, %.3f)\n", 
+                           i, offset, pos[0], pos[1], pos[2],
+                           vertices[i].position[0], vertices[i].position[1], vertices[i].position[2]);
+                }
+                
+                // Default texture coordinates
+                vertices[i].texcoord[0] = 0.0f;
+                vertices[i].texcoord[1] = 0.0f;
             }
             
-            // Extract normal data if available
-            if (normalIt != primitive.attributes.end()) {
-                const tinygltf::Accessor& normalAccessor = gltfModel.accessors[normalIt->second];
-                const tinygltf::BufferView& normalView = gltfModel.bufferViews[normalAccessor.bufferView];
-                const tinygltf::Buffer& normalBuffer = gltfModel.buffers[normalView.buffer];
-                
-                for (size_t i = 0; i < vertexCount; i++) {
-                    size_t offset = normalView.byteOffset + normalAccessor.byteOffset + i * 12;
-                    const float* normal = reinterpret_cast<const float*>(&normalBuffer.data[offset]);
-                    
-                    // Pack normals into efficient RGBA8 format
-                    vertices[i].normal = encodeNormalRgba8(normal[0], normal[1], normal[2]);
-                }
-            }
+            // Skip normal processing for now
             
             // Extract texture coordinates if available
             if (texcoordIt != primitive.attributes.end()) {
@@ -276,10 +277,9 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                     size_t offset = texcoordView.byteOffset + texcoordAccessor.byteOffset + i * 8;
                     const float* texcoord = reinterpret_cast<const float*>(&texcoordBuffer.data[offset]);
                     
-                    // Convert floating point UVs to compressed Int16 format
-                    // Don't clamp UVs to allow texture repeating
-                    vertices[i].texcoord[0] = int16_t(texcoord[0] * 32767.0f);
-                    vertices[i].texcoord[1] = int16_t(texcoord[1] * 32767.0f);
+                    // Use floating point UVs directly
+                    vertices[i].texcoord[0] = texcoord[0];
+                    vertices[i].texcoord[1] = texcoord[1];
                 }
             }
             
@@ -459,15 +459,11 @@ void Model::render(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform, 
     for (size_t i = 0; i < meshes.size(); i++) {
         const ModelMesh& mesh = meshes[i];
         
-        // Set texture with intensive debugging
+        // Set texture
         if (bgfx::isValid(mesh.texture)) {
-            fprintf(stderr, "TEXTURE_DEBUG: Rendering mesh %zu with valid texture\n", i);
             bgfx::setTexture(0, texUniform, mesh.texture);
         } else if (bgfx::isValid(fallbackTexture)) {
-            fprintf(stderr, "TEXTURE_DEBUG: Rendering mesh %zu with fallback texture\n", i);
             bgfx::setTexture(0, texUniform, fallbackTexture);
-        } else {
-            fprintf(stderr, "TEXTURE_DEBUG: Rendering mesh %zu with NO texture\n", i);
         }
         
         // Set buffers
@@ -556,9 +552,9 @@ bool Model::processBinaryMesh(const std::vector<uint8_t>& data) {
         vertices[i].position[2] = positions[i*3+2] * scaleFactor;
         
         // Set default normal and uv
-        vertices[i].normal = encodeNormalRgba8(0.0f, 1.0f, 0.0f); // Up vector
-        vertices[i].texcoord[0] = 0;
-        vertices[i].texcoord[1] = 0;
+        // No normal field anymore
+        vertices[i].texcoord[0] = 0.0f;
+        vertices[i].texcoord[1] = 0.0f;
     }
     
     // Create vertex buffer

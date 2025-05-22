@@ -17,18 +17,16 @@ namespace tinygltf {
     class TinyGLTF;
 }
 
-// Simple vertex structure for models
+// Simple vertex structure for models - matching textured cube format
 struct PosNormalTexcoordVertex {
     float position[3];
-    uint32_t normal;
-    int16_t texcoord[2];
+    float texcoord[2];  // Use float instead of int16
 
     static void init() {
         ms_layout
             .begin()
             .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-            .add(bgfx::Attrib::Normal, 4, bgfx::AttribType::Uint8, true, true)
-            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Int16, true, true)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
             .end();
     }
 
