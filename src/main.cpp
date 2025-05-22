@@ -120,14 +120,50 @@ static PosColorVertex cubeVertices[] = {
 
 // Copper-colored cube vertices (orange-brown copper color)
 static PosColorVertex copperCubeVertices[] = {
-    {-1.0f,  1.0f,  1.0f, 0xff2D72B8}, // 0: Front-top-left (copper orange)
-    { 1.0f,  1.0f,  1.0f, 0xff2D72B8}, // 1: Front-top-right (copper orange)
-    {-1.0f, -1.0f,  1.0f, 0xff1F5A9A}, // 2: Front-bottom-left (darker copper)
-    { 1.0f, -1.0f,  1.0f, 0xff1F5A9A}, // 3: Front-bottom-right (darker copper)
-    {-1.0f,  1.0f, -1.0f, 0xff3D82C8}, // 4: Back-top-left (lighter copper)
-    { 1.0f,  1.0f, -1.0f, 0xff3D82C8}, // 5: Back-top-right (lighter copper)
-    {-1.0f, -1.0f, -1.0f, 0xff1F5A9A}, // 6: Back-bottom-left (darker copper)
-    { 1.0f, -1.0f, -1.0f, 0xff1F5A9A}  // 7: Back-bottom-right (darker copper)
+    {-1.0f,  1.0f,  1.0f, 0xff4A90E2}, // 0: Front-top-left (copper orange)
+    { 1.0f,  1.0f,  1.0f, 0xff4A90E2}, // 1: Front-top-right (copper orange)
+    {-1.0f, -1.0f,  1.0f, 0xff3A7AC2}, // 2: Front-bottom-left (darker copper)
+    { 1.0f, -1.0f,  1.0f, 0xff3A7AC2}, // 3: Front-bottom-right (darker copper)
+    {-1.0f,  1.0f, -1.0f, 0xff5AA0F2}, // 4: Back-top-left (lighter copper)
+    { 1.0f,  1.0f, -1.0f, 0xff5AA0F2}, // 5: Back-top-right (lighter copper)
+    {-1.0f, -1.0f, -1.0f, 0xff3A7AC2}, // 6: Back-bottom-left (darker copper)
+    { 1.0f, -1.0f, -1.0f, 0xff3A7AC2}  // 7: Back-bottom-right (darker copper)
+};
+
+// Iron-colored cube vertices (metallic gray)
+static PosColorVertex ironCubeVertices[] = {
+    {-1.0f,  1.0f,  1.0f, 0xff909090}, // 0: Front-top-left (light gray)
+    { 1.0f,  1.0f,  1.0f, 0xff909090}, // 1: Front-top-right (light gray)
+    {-1.0f, -1.0f,  1.0f, 0xff606060}, // 2: Front-bottom-left (darker gray)
+    { 1.0f, -1.0f,  1.0f, 0xff606060}, // 3: Front-bottom-right (darker gray)
+    {-1.0f,  1.0f, -1.0f, 0xffA0A0A0}, // 4: Back-top-left (lighter gray)
+    { 1.0f,  1.0f, -1.0f, 0xffA0A0A0}, // 5: Back-top-right (lighter gray)
+    {-1.0f, -1.0f, -1.0f, 0xff606060}, // 6: Back-bottom-left (darker gray)
+    { 1.0f, -1.0f, -1.0f, 0xff606060}  // 7: Back-bottom-right (darker gray)
+};
+
+// Stone-colored cube vertices (rocky gray-brown)
+static PosColorVertex stoneCubeVertices[] = {
+    {-1.0f,  1.0f,  1.0f, 0xff808070}, // 0: Front-top-left (gray-brown)
+    { 1.0f,  1.0f,  1.0f, 0xff808070}, // 1: Front-top-right (gray-brown)
+    {-1.0f, -1.0f,  1.0f, 0xff504540}, // 2: Front-bottom-left (darker stone)
+    { 1.0f, -1.0f,  1.0f, 0xff504540}, // 3: Front-bottom-right (darker stone)
+    {-1.0f,  1.0f, -1.0f, 0xff909080}, // 4: Back-top-left (lighter stone)
+    { 1.0f,  1.0f, -1.0f, 0xff909080}, // 5: Back-top-right (lighter stone)
+    {-1.0f, -1.0f, -1.0f, 0xff504540}, // 6: Back-bottom-left (darker stone)
+    { 1.0f, -1.0f, -1.0f, 0xff504540}  // 7: Back-bottom-right (darker stone)
+};
+
+// NPC cube vertices (will be dynamically colored)
+static PosColorVertex npcCubeVertices[] = {
+    {-1.0f,  1.0f,  1.0f, 0xff00AA00}, // 0: Front-top-left (will be set per NPC)
+    { 1.0f,  1.0f,  1.0f, 0xff00AA00}, // 1: Front-top-right
+    {-1.0f, -1.0f,  1.0f, 0xff008800}, // 2: Front-bottom-left (darker variant)
+    { 1.0f, -1.0f,  1.0f, 0xff008800}, // 3: Front-bottom-right (darker variant)
+    {-1.0f,  1.0f, -1.0f, 0xff00CC00}, // 4: Back-top-left (lighter variant)
+    { 1.0f,  1.0f, -1.0f, 0xff00CC00}, // 5: Back-top-right (lighter variant)
+    {-1.0f, -1.0f, -1.0f, 0xff008800}, // 6: Back-bottom-left (darker variant)
+    { 1.0f, -1.0f, -1.0f, 0xff008800}  // 7: Back-bottom-right (darker variant)
 };
 
 // Textured cube vertices
@@ -564,6 +600,137 @@ struct ResourceNode {
     }
 };
 
+// NPC System
+enum class NPCType {
+    WANDERER,
+    VILLAGER,
+    MERCHANT
+};
+
+enum class NPCState {
+    WANDERING,
+    IDLE,
+    MOVING_TO_TARGET
+};
+
+struct NPC {
+    bx::Vec3 position;
+    bx::Vec3 velocity;
+    bx::Vec3 targetPosition;
+    NPCType type;
+    NPCState state;
+    float speed;
+    float size;
+    float stateTimer;
+    float maxStateTime;
+    bool isActive;
+    uint32_t color;
+    
+    NPC(float x, float y, float z, NPCType npcType) 
+        : position({x, y, z}), velocity({0.0f, 0.0f, 0.0f}), targetPosition({x, y, z}),
+          type(npcType), state(NPCState::IDLE), speed(1.5f), size(0.8f), 
+          stateTimer(0.0f), maxStateTime(3.0f), isActive(true) {
+        
+        // Set NPC-specific properties
+        switch (type) {
+            case NPCType::WANDERER:
+                speed = 2.0f;
+                color = 0xff00AA00; // Green
+                maxStateTime = 2.0f + (bx::sin(x * 0.1f) * 0.5f + 0.5f) * 3.0f; // 2-5 seconds
+                break;
+            case NPCType::VILLAGER:
+                speed = 1.0f;
+                color = 0xff0066FF; // Blue
+                maxStateTime = 4.0f + (bx::cos(z * 0.1f) * 0.5f + 0.5f) * 4.0f; // 4-8 seconds
+                break;
+            case NPCType::MERCHANT:
+                speed = 1.5f;
+                color = 0xffFFAA00; // Orange
+                maxStateTime = 3.0f + (bx::sin((x + z) * 0.1f) * 0.5f + 0.5f) * 2.0f; // 3-5 seconds
+                break;
+        }
+    }
+    
+    void update(float deltaTime, float terrainHeight) {
+        if (!isActive) return;
+        
+        stateTimer += deltaTime;
+        
+        switch (state) {
+            case NPCState::IDLE:
+                if (stateTimer >= maxStateTime) {
+                    // Pick a new random target within reasonable distance
+                    float angle = (bx::sin(position.x * 0.7f + stateTimer) * 0.5f + 0.5f) * 2.0f * bx::kPi;
+                    float distance = 5.0f + (bx::cos(position.z * 0.8f + stateTimer) * 0.5f + 0.5f) * 10.0f; // 5-15 units
+                    
+                    targetPosition.x = position.x + bx::cos(angle) * distance;
+                    targetPosition.z = position.z + bx::sin(angle) * distance;
+                    
+                    state = NPCState::MOVING_TO_TARGET;
+                    stateTimer = 0.0f;
+                }
+                break;
+                
+            case NPCState::MOVING_TO_TARGET: {
+                // Move towards target
+                float dx = targetPosition.x - position.x;
+                float dz = targetPosition.z - position.z;
+                float distance = bx::sqrt(dx * dx + dz * dz);
+                
+                if (distance < 1.0f) {
+                    // Reached target, go idle
+                    state = NPCState::IDLE;
+                    stateTimer = 0.0f;
+                    velocity = {0.0f, 0.0f, 0.0f};
+                } else {
+                    // Move towards target
+                    velocity.x = (dx / distance) * speed;
+                    velocity.z = (dz / distance) * speed;
+                    
+                    position.x += velocity.x * deltaTime;
+                    position.z += velocity.z * deltaTime;
+                    
+                    // Update Y position to follow terrain
+                    position.y = terrainHeight + size - 5.0f;
+                }
+                
+                // Timeout check - if moving too long, go idle
+                if (stateTimer > 15.0f) {
+                    state = NPCState::IDLE;
+                    stateTimer = 0.0f;
+                    velocity = {0.0f, 0.0f, 0.0f};
+                }
+                break;
+            }
+                
+            case NPCState::WANDERING:
+                // Continuous random walk
+                if (stateTimer >= 1.0f) {
+                    float angle = (bx::sin(position.x * 1.1f + stateTimer) + bx::cos(position.z * 0.9f + stateTimer)) * 0.5f;
+                    velocity.x = bx::cos(angle) * speed * 0.5f;
+                    velocity.z = bx::sin(angle) * speed * 0.5f;
+                    stateTimer = 0.0f;
+                }
+                
+                position.x += velocity.x * deltaTime;
+                position.z += velocity.z * deltaTime;
+                
+                // Update Y position to follow terrain
+                position.y = terrainHeight + size - 5.0f;
+                break;
+        }
+    }
+    
+    const char* getTypeName() const {
+        switch (type) {
+            case NPCType::WANDERER: return "Wanderer";
+            case NPCType::VILLAGER: return "Villager";
+            case NPCType::MERCHANT: return "Merchant";
+            default: return "Unknown";
+        }
+    }
+};
+
 // Chunk management system
 class ChunkManager {
 public:
@@ -572,6 +739,7 @@ public:
 private:
     std::unordered_map<uint64_t, std::unique_ptr<TerrainChunk>> loadedChunks;
     std::vector<ResourceNode>* worldResourceNodes; // Pointer to global resource nodes
+    std::vector<NPC>* worldNPCs; // Pointer to global NPCs
     int playerChunkX = 0;
     int playerChunkZ = 0;
     
@@ -719,6 +887,122 @@ private:
         }
     }
     
+    // Generate procedural NPCs for a chunk
+    void generateNPCsForChunk(int chunkX, int chunkZ) {
+        if (!worldNPCs) return;
+        
+        BiomeType chunkBiome = getBiomeForChunk(chunkX, chunkZ);
+        
+        // World coordinates for this chunk
+        float chunkWorldX = chunkX * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+        float chunkWorldZ = chunkZ * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+        
+        // Generate NPCs based on biome (lower density than resources)
+        int npcCount = 0;
+        float density = 0.1f; // Much lower base density than resources
+        
+        // Biome-specific NPC generation
+        switch (chunkBiome) {
+            case BiomeType::GRASSLAND:
+                // Grasslands have the most NPCs (villages)
+                density = 0.15f;
+                for (int attempts = 0; attempts < 3; attempts++) {
+                    float seed = (chunkX * 89.0f + chunkZ * 67.0f + attempts * 43.0f);
+                    float noiseValue = bx::sin(seed * 0.08f) * bx::cos(seed * 0.12f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.5f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.6f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        NPCType npcType;
+                        float typeNoise = bx::sin(seed * 1.3f);
+                        if (typeNoise < -0.2f) npcType = NPCType::MERCHANT;
+                        else if (typeNoise < 0.4f) npcType = NPCType::VILLAGER;
+                        else npcType = NPCType::WANDERER;
+                        
+                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        
+                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        npcCount++;
+                    }
+                }
+                break;
+                
+            case BiomeType::DESERT:
+                // Desert has wanderers and occasional merchants
+                density = 0.08f;
+                for (int attempts = 0; attempts < 2; attempts++) {
+                    float seed = (chunkX * 97.0f + chunkZ * 73.0f + attempts * 47.0f);
+                    float noiseValue = bx::sin(seed * 0.1f) * bx::cos(seed * 0.09f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.4f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.7f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        NPCType npcType = (bx::sin(seed * 0.9f) > 0.3f) ? NPCType::WANDERER : NPCType::MERCHANT;
+                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        
+                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        npcCount++;
+                    }
+                }
+                break;
+                
+            case BiomeType::MOUNTAINS:
+                // Mountains have few NPCs, mostly wanderers
+                density = 0.05f;
+                for (int attempts = 0; attempts < 2; attempts++) {
+                    float seed = (chunkX * 83.0f + chunkZ * 79.0f + attempts * 53.0f);
+                    float noiseValue = bx::sin(seed * 0.15f) * bx::cos(seed * 0.07f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.6f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.8f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        NPCType npcType = NPCType::WANDERER; // Only wanderers in mountains
+                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        
+                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        npcCount++;
+                    }
+                }
+                break;
+                
+            case BiomeType::SWAMP:
+                // Swamps have very few NPCs
+                density = 0.03f;
+                for (int attempts = 0; attempts < 1; attempts++) {
+                    float seed = (chunkX * 101.0f + chunkZ * 103.0f + attempts * 59.0f);
+                    float noiseValue = bx::sin(seed * 0.18f) * bx::cos(seed * 0.06f);
+                    
+                    if (noiseValue > (1.0f - density)) {
+                        float offsetX = (bx::sin(seed * 0.3f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float offsetZ = (bx::cos(seed * 0.9f) * 0.5f + 0.5f) * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                        float worldX = chunkWorldX + offsetX;
+                        float worldZ = chunkWorldZ + offsetZ;
+                        
+                        NPCType npcType = NPCType::WANDERER; // Only wanderers in swamps
+                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        
+                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        npcCount++;
+                    }
+                }
+                break;
+        }
+        
+        if (npcCount > 0) {
+            std::cout << "Generated " << npcCount << " NPCs in " 
+                      << getBiomeName(chunkBiome) << " chunk (" << chunkX << ", " << chunkZ << ")" << std::endl;
+        }
+    }
+    
     // Helper function to get biome name
     const char* getBiomeName(BiomeType biome) const {
         switch (biome) {
@@ -736,6 +1020,11 @@ public:
     // Set pointer to global resource nodes vector
     void setResourceNodesPointer(std::vector<ResourceNode>* nodes) {
         worldResourceNodes = nodes;
+    }
+    
+    // Set pointer to global NPCs vector
+    void setNPCsPointer(std::vector<NPC>* npcs) {
+        worldNPCs = npcs;
     }
     
     // Force initial chunk loading around player position
@@ -874,6 +1163,9 @@ private:
                     
                     // Generate resource nodes for this new chunk
                     generateResourcesForChunk(x, z);
+                    
+                    // Generate NPCs for this new chunk
+                    generateNPCsForChunk(x, z);
                 } else {
                     std::cout << "  Chunk (" << x << ", " << z << ") already exists" << std::endl;
                 }
@@ -973,19 +1265,12 @@ struct PlayerInventory {
     }
     
     void toggleOverlay() {
-        std::cout << "Before toggle: showOverlay = " << showOverlay << std::endl;
         showOverlay = !showOverlay;
-        std::cout << "After toggle: showOverlay = " << showOverlay << std::endl;
         std::cout << "Inventory overlay " << (showOverlay ? "enabled" : "disabled") << std::endl;
     }
     
     void renderOverlay() const {
-        if (!showOverlay) {
-            std::cout << "renderOverlay called but showOverlay = false, not rendering" << std::endl;
-            return;
-        }
-        
-        std::cout << "renderOverlay: Actually rendering inventory (showOverlay = true)" << std::endl;
+        if (!showOverlay) return;
         
         // Position inventory in top left corner
         int x = 1; // 1 character from left edge
@@ -1408,6 +1693,15 @@ int main(int argc, char* argv[]) {
     bgfx::VertexBufferHandle copperVbh = bgfx::createVertexBuffer(
         bgfx::makeRef(copperCubeVertices, sizeof(copperCubeVertices)), layout);
     
+    bgfx::VertexBufferHandle ironVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(ironCubeVertices, sizeof(ironCubeVertices)), layout);
+    
+    bgfx::VertexBufferHandle stoneVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(stoneCubeVertices, sizeof(stoneCubeVertices)), layout);
+    
+    bgfx::VertexBufferHandle npcVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(npcCubeVertices, sizeof(npcCubeVertices)), layout);
+    
     bgfx::VertexBufferHandle texVbh = bgfx::createVertexBuffer(
         bgfx::makeRef(texCubeVertices, sizeof(texCubeVertices)), texLayout);
 
@@ -1537,14 +1831,19 @@ int main(int argc, char* argv[]) {
     // Create resource nodes vector (will be populated by procedural generation)
     std::vector<ResourceNode> resourceNodes;
     
-    // Connect ChunkManager to resource nodes for procedural generation
+    // Create NPCs vector (will be populated by procedural generation)
+    std::vector<NPC> npcs;
+    
+    // Connect ChunkManager to resource nodes and NPCs for procedural generation
     chunkManager.setResourceNodesPointer(&resourceNodes);
+    chunkManager.setNPCsPointer(&npcs);
     
     // Force initial chunk loading around player (this will generate resources)
     chunkManager.forceInitialChunkLoad(player.position.x, player.position.z);
     player.position.y = chunkManager.getHeightAt(0.0f, 0.0f) + player.size - 5.0f;
     
-    std::cout << "Initial world generation complete. Total resource nodes: " << resourceNodes.size() << std::endl;
+    std::cout << "Initial world generation complete. Total resource nodes: " << resourceNodes.size() 
+              << ", Total NPCs: " << npcs.size() << std::endl;
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
     std::cout << "WASD - Move camera" << std::endl;
@@ -1766,6 +2065,7 @@ int main(int argc, char* argv[]) {
         }
         
         time += 0.01f;
+        float deltaTime = 0.01f; // Fixed delta time for now
 
         // Set up camera view matrix
         bx::Vec3 target = {
@@ -1832,12 +2132,41 @@ int main(int argc, char* argv[]) {
             bx::mtxTranslate(nodeTranslation, node.position.x, node.position.y, node.position.z);
             bx::mtxMul(nodeMatrix, nodeScale, nodeTranslation);
             
-            // Use copper-colored vertex buffer for copper nodes, regular for others
-            if (node.type == ResourceType::COPPER) {
-                render_object_at_position(copperVbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nodeMatrix);
-            } else {
-                render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nodeMatrix);
+            // Use appropriate colored vertex buffer for each resource type
+            bgfx::VertexBufferHandle nodeVbh;
+            switch (node.type) {
+                case ResourceType::COPPER:
+                    nodeVbh = copperVbh;
+                    break;
+                case ResourceType::IRON:
+                    nodeVbh = ironVbh;
+                    break;
+                case ResourceType::STONE:
+                    nodeVbh = stoneVbh;
+                    break;
+                default:
+                    nodeVbh = vbh; // Fallback to regular colored cube
+                    break;
             }
+            render_object_at_position(nodeVbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nodeMatrix);
+        }
+        
+        // Update and render NPCs
+        for (auto& npc : npcs) {
+            if (!npc.isActive) continue;
+            
+            // Update NPC AI
+            float npcTerrainHeight = chunkManager.getHeightAt(npc.position.x, npc.position.z);
+            npc.update(deltaTime, npcTerrainHeight);
+            
+            // Render NPC
+            float npcMatrix[16], npcTranslation[16], npcScale[16];
+            bx::mtxScale(npcScale, npc.size, npc.size, npc.size);
+            bx::mtxTranslate(npcTranslation, npc.position.x, npc.position.y, npc.position.z);
+            bx::mtxMul(npcMatrix, npcScale, npcTranslation);
+            
+            // Use NPC vertex buffer (we'll update colors dynamically later if needed)
+            render_object_at_position(npcVbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, npcMatrix);
         }
         
         // Render colored cube (left side)
