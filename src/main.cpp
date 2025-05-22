@@ -260,48 +260,43 @@ private:
     }
     
     float generateBiomeHeight(float baseNoise, float worldX, float worldZ) {
-        float height = 0.0f;
-        
         // Add secondary global noise layers for more detail (using world coordinates)
         float detailNoise1 = bx::sin(worldX * 0.05f) * bx::cos(worldZ * 0.04f);
         float detailNoise2 = bx::sin(worldX * 0.12f + worldZ * 0.1f);
         float fineNoise = bx::sin(worldX * 0.25f) * bx::cos(worldZ * 0.22f);
         
-        switch (biome) {
-            case BiomeType::DESERT:
-                // Flat with occasional dunes
-                height = baseNoise * HEIGHT_SCALE * 1.2f;
-                height += detailNoise1 * HEIGHT_SCALE * 0.3f; // Sand dunes
-                height += fineNoise * HEIGHT_SCALE * 0.1f; // Fine sand ripples
-                break;
-                
-            case BiomeType::MOUNTAINS:
-                // High elevation with steep variations
-                height = (baseNoise + 0.2f) * HEIGHT_SCALE * 2.5f;
-                height += detailNoise1 * HEIGHT_SCALE * 1.2f; // Mountain ridges
-                height += detailNoise2 * HEIGHT_SCALE * 0.6f; // Rocky details
-                height += fineNoise * HEIGHT_SCALE * 0.3f; // Sharp peaks
-                height += 8.0f; // Base mountain elevation
-                break;
-                
-            case BiomeType::SWAMP:
-                // Low, flat terrain with small variations
-                height = baseNoise * HEIGHT_SCALE * 0.4f;
-                height += detailNoise2 * HEIGHT_SCALE * 0.15f; // Marshland bumps
-                height += fineNoise * HEIGHT_SCALE * 0.05f; // Subtle texture
-                height -= 1.0f; // Slightly below sea level
-                break;
-                
-            case BiomeType::GRASSLAND:
-                // Rolling hills with good variation
-                height = baseNoise * HEIGHT_SCALE * 1.5f;
-                height += detailNoise1 * HEIGHT_SCALE * 0.8f; // Rolling hills
-                height += detailNoise2 * HEIGHT_SCALE * 0.4f; // Medium features
-                height += fineNoise * HEIGHT_SCALE * 0.2f; // Small details
-                break;
+        // Calculate biome influence at this exact world position for smooth blending
+        float biomeNoise = bx::sin(worldX * 0.001f) * bx::cos(worldZ * 0.0008f);
+        biomeNoise += bx::sin(worldX * 0.0005f + worldZ * 0.0007f) * 0.3f;
+        
+        // Calculate weights for each biome based on distance from thresholds
+        float swampWeight = 1.0f - bx::clamp((biomeNoise + 0.3f) / 0.4f, 0.0f, 1.0f);  // Strong below -0.3
+        float desertWeight = bx::max(0.0f, 1.0f - bx::abs(biomeNoise + 0.2f) / 0.2f);    // Peak at -0.2
+        float grasslandWeight = bx::max(0.0f, 1.0f - bx::abs(biomeNoise - 0.05f) / 0.3f); // Peak at 0.05  
+        float mountainWeight = bx::clamp((biomeNoise - 0.1f) / 0.3f, 0.0f, 1.0f);        // Strong above 0.2
+        
+        // Normalize weights so they sum to 1.0
+        float totalWeight = swampWeight + desertWeight + grasslandWeight + mountainWeight;
+        if (totalWeight > 0.0f) {
+            swampWeight /= totalWeight;
+            desertWeight /= totalWeight;
+            grasslandWeight /= totalWeight;
+            mountainWeight /= totalWeight;
         }
         
-        return height;
+        // Calculate height for each biome type
+        float swampHeight = baseNoise * HEIGHT_SCALE * 0.4f + detailNoise2 * HEIGHT_SCALE * 0.15f + fineNoise * HEIGHT_SCALE * 0.05f - 1.0f;
+        
+        float desertHeight = baseNoise * HEIGHT_SCALE * 1.2f + detailNoise1 * HEIGHT_SCALE * 0.3f + fineNoise * HEIGHT_SCALE * 0.1f;
+        
+        float grasslandHeight = baseNoise * HEIGHT_SCALE * 1.5f + detailNoise1 * HEIGHT_SCALE * 0.8f + detailNoise2 * HEIGHT_SCALE * 0.4f + fineNoise * HEIGHT_SCALE * 0.2f;
+        
+        float mountainHeight = (baseNoise + 0.2f) * HEIGHT_SCALE * 2.5f + detailNoise1 * HEIGHT_SCALE * 1.2f + detailNoise2 * HEIGHT_SCALE * 0.6f + fineNoise * HEIGHT_SCALE * 0.3f + 8.0f;
+        
+        // Blend heights based on biome weights for seamless transitions
+        float blendedHeight = swampHeight * swampWeight + desertHeight * desertWeight + grasslandHeight * grasslandWeight + mountainHeight * mountainWeight;
+        
+        return blendedHeight;
     }
     
     void generateIndices() {

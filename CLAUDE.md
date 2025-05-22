@@ -170,6 +170,13 @@ class ChunkManager {
 
 ### Seamless World Generation
 
+**Deterministic Procedural Generation**: The current system generates a **consistent, deterministic world**:
+- **Same every playthrough**: World coordinates always produce identical terrain/biomes
+- **Persistent when revisiting**: Areas regenerate exactly the same when you return  
+- **No random seed**: Uses pure mathematical functions based on world position
+- **Benefits**: Reliable for testing, exploration, and finding specific areas again
+- **Future enhancement**: Could add seed-based variation for different worlds per playthrough
+
 #### Global Noise System
 ```cpp
 float getGlobalNoise(float worldX, float worldZ) const {
@@ -278,6 +285,26 @@ BiomeType getBiomeAtWorldPos(float worldX, float worldZ) const {
    - Stretched/deformed models = vertex format mismatch with shaders
    - All vertices same position = buffer stride calculation bug
    - Missing textures = UV coordinate reading issue
+
+### Critical Hash Key Generation for Negative Coordinates
+
+**IMPORTANT**: When using signed coordinates (chunk positions, grid indices) as hash map keys:
+
+```cpp
+// WRONG - breaks with negative coordinates:
+uint64_t key = (uint64_t(chunkX) << 32) | uint64_t(chunkZ);
+
+// CORRECT - handles negative coordinates properly:
+uint64_t getChunkKey(int chunkX, int chunkZ) const {
+    uint64_t x = static_cast<uint64_t>(static_cast<uint32_t>(chunkX));
+    uint64_t z = static_cast<uint64_t>(static_cast<uint32_t>(chunkZ));
+    return (x << 32) | z;
+}
+```
+
+**Symptom**: Objects/chunks with negative coordinates appear "missing" even though debug shows them as "loaded" or "rendered"
+
+**Applies to**: Any coordinate-based systems (entities, spatial indexing, save/load, grid systems)
 
 ### Testing Changes
 ```bash
