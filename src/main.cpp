@@ -151,6 +151,231 @@ static const uint16_t texCubeIndices[] = {
     20, 21, 22, 21, 23, 22
 };
 
+// Terrain system
+struct TerrainVertex {
+    float x, y, z;
+    float u, v;
+};
+
+class Terrain {
+public:
+    static constexpr int SIZE = 64;
+    static constexpr float SCALE = 0.5f;
+    static constexpr float HEIGHT_SCALE = 3.0f;
+    
+    std::vector<TerrainVertex> vertices;
+    std::vector<uint16_t> indices;
+    bgfx::VertexBufferHandle vbh;
+    bgfx::IndexBufferHandle ibh;
+    
+    void generate() {
+        vertices.clear();
+        indices.clear();
+        
+        // Generate vertices with simple noise-based height
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+        
+        for (int z = 0; z < SIZE; z++) {
+            for (int x = 0; x < SIZE; x++) {
+                float worldX = (x - SIZE/2) * SCALE;
+                float worldZ = (z - SIZE/2) * SCALE;
+                
+                // Simple height generation using multiple octaves
+                float height = 0.0f;
+                height += (dis(gen) - 0.5f) * HEIGHT_SCALE * 0.5f;
+                height += bx::sin(worldX * 0.1f) * HEIGHT_SCALE * 0.3f;
+                height += bx::cos(worldZ * 0.15f) * HEIGHT_SCALE * 0.2f;
+                
+                TerrainVertex vertex;
+                vertex.x = worldX;
+                vertex.y = height;
+                vertex.z = worldZ;
+                vertex.u = float(x) / (SIZE - 1);
+                vertex.v = float(z) / (SIZE - 1);
+                
+                vertices.push_back(vertex);
+            }
+        }
+        
+        // Generate indices for triangles
+        for (int z = 0; z < SIZE - 1; z++) {
+            for (int x = 0; x < SIZE - 1; x++) {
+                int topLeft = z * SIZE + x;
+                int topRight = z * SIZE + (x + 1);
+                int bottomLeft = (z + 1) * SIZE + x;
+                int bottomRight = (z + 1) * SIZE + (x + 1);
+                
+                // First triangle
+                indices.push_back(topLeft);
+                indices.push_back(bottomLeft);
+                indices.push_back(topRight);
+                
+                // Second triangle
+                indices.push_back(topRight);
+                indices.push_back(bottomLeft);
+                indices.push_back(bottomRight);
+            }
+        }
+        
+        std::cout << "Generated terrain with " << vertices.size() << " vertices and " 
+                  << indices.size() << " indices" << std::endl;
+    }
+    
+    void createBuffers() {
+        const bgfx::Memory* vertexMem = bgfx::copy(vertices.data(), vertices.size() * sizeof(TerrainVertex));
+        const bgfx::Memory* indexMem = bgfx::copy(indices.data(), indices.size() * sizeof(uint16_t));
+        
+        bgfx::VertexLayout terrainLayout;
+        terrainLayout.begin()
+            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+            .end();
+        
+        vbh = bgfx::createVertexBuffer(vertexMem, terrainLayout);
+        ibh = bgfx::createIndexBuffer(indexMem);
+    }
+    
+    float getHeightAt(float x, float z) const {
+        // Convert world coordinates to terrain grid coordinates
+        float gridX = (x / SCALE) + SIZE/2;
+        float gridZ = (z / SCALE) + SIZE/2;
+        
+        // Clamp to terrain bounds
+        if (gridX < 0 || gridX >= SIZE-1 || gridZ < 0 || gridZ >= SIZE-1) {
+            return 0.0f;
+        }
+        
+        int x1 = (int)gridX;
+        int z1 = (int)gridZ;
+        int x2 = x1 + 1;
+        int z2 = z1 + 1;
+        
+        float fx = gridX - x1;
+        float fz = gridZ - z1;
+        
+        // Get heights at four corners
+        float h1 = vertices[z1 * SIZE + x1].y;
+        float h2 = vertices[z1 * SIZE + x2].y;
+        float h3 = vertices[z2 * SIZE + x1].y;
+        float h4 = vertices[z2 * SIZE + x2].y;
+        
+        // Bilinear interpolation
+        float top = h1 * (1 - fx) + h2 * fx;
+        float bottom = h3 * (1 - fx) + h4 * fx;
+        return top * (1 - fz) + bottom * fz;
+    }
+};
+
+// Player system
+struct Player {
+    bx::Vec3 position;
+    bx::Vec3 targetPosition;
+    bool hasTarget;
+    float moveSpeed;
+    float size;
+    
+    Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
+               hasTarget(false), moveSpeed(0.05f), size(0.3f) {}
+    
+    void setTarget(float x, float z, const Terrain& terrain) {
+        targetPosition.x = x;
+        targetPosition.z = z;
+        targetPosition.y = terrain.getHeightAt(x, z) + size - 5.0f; // Account for terrain offset
+        hasTarget = true;
+    }
+    
+    void update(const Terrain& terrain) {
+        if (hasTarget) {
+            bx::Vec3 direction = {
+                targetPosition.x - position.x,
+                0.0f,
+                targetPosition.z - position.z
+            };
+            
+            float distance = bx::sqrt(direction.x * direction.x + direction.z * direction.z);
+            
+            if (distance < 0.1f) {
+                position = targetPosition;
+                hasTarget = false;
+            } else {
+                direction.x /= distance;
+                direction.z /= distance;
+                
+                position.x += direction.x * moveSpeed;
+                position.z += direction.z * moveSpeed;
+                position.y = terrain.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
+            }
+        }
+    }
+};
+
+// Ray casting for mouse picking
+struct Ray {
+    bx::Vec3 origin;
+    bx::Vec3 direction;
+};
+
+Ray createRayFromMouse(float mouseX, float mouseY, int screenWidth, int screenHeight, 
+                       const float* viewMatrix, const float* projMatrix) {
+    // Convert mouse coordinates to normalized device coordinates
+    float x = (2.0f * mouseX) / screenWidth - 1.0f;
+    float y = 1.0f - (2.0f * mouseY) / screenHeight;
+    
+    // Create ray in clip space
+    bx::Vec3 rayClip = {x, y, -1.0f};
+    
+    // Convert to eye space
+    float invProj[16];
+    bx::mtxInverse(invProj, projMatrix);
+    
+    bx::Vec3 rayEye = {x, y, -1.0f};
+    rayEye = bx::mul(rayEye, invProj);
+    rayEye.z = -1.0f;
+    
+    // Convert to world space
+    float invView[16];
+    bx::mtxInverse(invView, viewMatrix);
+    
+    bx::Vec3 cameraPos = {0.0f, 0.0f, 0.0f};
+    bx::Vec3 origin = bx::mul(cameraPos, invView);
+    bx::Vec3 direction = bx::mul(rayEye, invView);
+    direction = bx::normalize(direction);
+    
+    Ray ray = {{origin.x, origin.y, origin.z}, {direction.x, direction.y, direction.z}};
+    
+    return ray;
+}
+
+bool rayTerrainIntersection(const Ray& ray, const Terrain& terrain, bx::Vec3& hitPoint) {
+    // Simple ray-terrain intersection using step marching
+    float t = 0.0f;
+    float maxDistance = 100.0f;
+    float stepSize = 0.1f;
+    
+    while (t < maxDistance) {
+        bx::Vec3 point = {
+            ray.origin.x + ray.direction.x * t,
+            ray.origin.y + ray.direction.y * t,
+            ray.origin.z + ray.direction.z * t
+        };
+        
+        float terrainHeight = terrain.getHeightAt(point.x, point.z);
+        
+        if (point.y <= terrainHeight) {
+            hitPoint.x = point.x;
+            hitPoint.y = terrainHeight;
+            hitPoint.z = point.z;
+            return true;
+        }
+        
+        t += stepSize;
+    }
+    
+    return false;
+}
+
 // Shader vertex layouts
 static bgfx::VertexLayout layout;
 static bgfx::VertexLayout texLayout;
@@ -512,12 +737,23 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
+    // Create terrain and player
+    std::cout << "Creating terrain..." << std::endl;
+    Terrain terrain;
+    terrain.generate();
+    terrain.createBuffers();
+    
+    std::cout << "Creating player..." << std::endl;
+    Player player;
+    player.position = {0.0f, terrain.getHeightAt(0.0f, 0.0f) + player.size - 5.0f, 0.0f};
+    
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
     std::cout << "WASD - Move camera" << std::endl;
     std::cout << "SHIFT - Sprint (faster movement)" << std::endl;
     std::cout << "Q/E  - Move up/down" << std::endl;
-    std::cout << "Click and drag mouse - Rotate camera" << std::endl;
+    std::cout << "Left click and drag - Rotate camera" << std::endl;
+    std::cout << "Right click - Move player to terrain location" << std::endl;
     std::cout << "ESC  - Exit" << std::endl;
     std::cout << "===================" << std::endl;
     
@@ -527,14 +763,19 @@ int main(int argc, char* argv[]) {
     float time = 0.0f;
     
     // Camera variables
-    bx::Vec3 cameraPos = {0.0f, 0.0f, -10.0f};
+    bx::Vec3 cameraPos = {0.0f, 8.0f, -10.0f};
     float cameraYaw = 0.0f;
-    float cameraPitch = 0.0f;
+    float cameraPitch = -0.3f;
     
     // Mouse variables for camera rotation
     float prevMouseX = 0.0f;
     float prevMouseY = 0.0f;
     bool mouseDown = false;
+    
+    // Mouse variables for terrain picking
+    float pendingMouseX = 0.0f;
+    float pendingMouseY = 0.0f;
+    bool hasPendingClick = false;
     
     const bool* keyboardState = SDL_GetKeyboardState(NULL);
     
@@ -560,6 +801,11 @@ int main(int argc, char* argv[]) {
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     mouseDown = true;
                     SDL_GetMouseState(&prevMouseX, &prevMouseY);
+                }
+                else if (event.button.button == SDL_BUTTON_RIGHT) {
+                    // Right click for terrain picking
+                    SDL_GetMouseState(&pendingMouseX, &pendingMouseY);
+                    hasPendingClick = true;
                 }
             }
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
@@ -648,6 +894,34 @@ int main(int argc, char* argv[]) {
         
         bgfx::setViewTransform(0, view, proj);
         bgfx::setViewRect(0, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+        
+        // Handle terrain picking from right-click
+        if (hasPendingClick) {
+            Ray ray = createRayFromMouse(pendingMouseX, pendingMouseY, WINDOW_WIDTH, WINDOW_HEIGHT, view, proj);
+            bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
+            if (rayTerrainIntersection(ray, terrain, hitPoint)) {
+                player.setTarget(hitPoint.x, hitPoint.z, terrain);
+                std::cout << "Player moving to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+            }
+            hasPendingClick = false;
+        }
+        
+        // Update player
+        player.update(terrain);
+        
+        // Render terrain (moved down to avoid intersecting with cubes)
+        float terrainMatrix[16], terrainTranslation[16];
+        bx::mtxTranslate(terrainTranslation, 0.0f, -5.0f, 0.0f);
+        bx::mtxIdentity(terrainMatrix);
+        bx::mtxMul(terrainMatrix, terrainMatrix, terrainTranslation);
+        render_object_at_position(terrain.vbh, terrain.ibh, texProgram, proceduralTexture, s_texColor, terrainMatrix);
+        
+        // Render player as a colored cube
+        float playerMatrix[16], playerTranslation[16], playerScale[16];
+        bx::mtxScale(playerScale, player.size, player.size, player.size);
+        bx::mtxTranslate(playerTranslation, player.position.x, player.position.y, player.position.z);
+        bx::mtxMul(playerMatrix, playerScale, playerTranslation);
+        render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, playerMatrix);
         
         // Render colored cube (left side)
         float coloredMtx[16], translation[16], rotation[16];
