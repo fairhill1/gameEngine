@@ -13,6 +13,7 @@
 #include <random>
 #include <unordered_map>
 #include <string>
+#include <memory>
 
 // Define STB_IMAGE_IMPLEMENTATION before including to create the implementation
 #define STB_IMAGE_IMPLEMENTATION
@@ -361,6 +362,11 @@ public:
     }
 };
 
+// Forward declaration
+void render_object_at_position(bgfx::VertexBufferHandle vbh, bgfx::IndexBufferHandle ibh, 
+                              bgfx::ProgramHandle program, bgfx::TextureHandle texture, 
+                              bgfx::UniformHandle texUniform, const float* modelMatrix);
+
 // Chunk management system
 class ChunkManager {
 public:
@@ -502,14 +508,14 @@ struct Player {
     Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
                hasTarget(false), moveSpeed(0.05f), size(0.3f) {}
     
-    void setTarget(float x, float z, const TerrainChunk& terrain) {
+    void setTarget(float x, float z, const ChunkManager& chunkManager) {
         targetPosition.x = x;
         targetPosition.z = z;
-        targetPosition.y = terrain.getHeightAt(x, z) + size - 5.0f; // Account for terrain offset
+        targetPosition.y = chunkManager.getHeightAt(x, z) + size - 5.0f; // Account for terrain offset
         hasTarget = true;
     }
     
-    void update(const TerrainChunk& terrain) {
+    void update(const ChunkManager& chunkManager) {
         if (hasTarget) {
             bx::Vec3 direction = {
                 targetPosition.x - position.x,
@@ -528,7 +534,7 @@ struct Player {
                 
                 position.x += direction.x * moveSpeed;
                 position.z += direction.z * moveSpeed;
-                position.y = terrain.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
+                position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
             }
         }
     }
@@ -576,7 +582,7 @@ Ray createRayFromMouse(float mouseX, float mouseY, int screenWidth, int screenHe
     return ray;
 }
 
-bool rayTerrainIntersection(const Ray& ray, const TerrainChunk& terrain, bx::Vec3& hitPoint) {
+bool rayTerrainIntersection(const Ray& ray, const ChunkManager& chunkManager, bx::Vec3& hitPoint) {
     float t = 0.0f;
     float maxDistance = 200.0f;
     float stepSize = 0.1f;
@@ -596,7 +602,7 @@ bool rayTerrainIntersection(const Ray& ray, const TerrainChunk& terrain, bx::Vec
             ray.origin.z + ray.direction.z * t
         };
         
-        float rawTerrainHeight = terrain.getHeightAt(currentPoint.x, currentPoint.z);
+        float rawTerrainHeight = chunkManager.getHeightAt(currentPoint.x, currentPoint.z);
         float actualTerrainHeight = rawTerrainHeight + TERRAIN_Y_OFFSET;
         
         // Check if we're close to or below terrain (accounting for offset)
@@ -988,19 +994,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Create terrain chunk and player
-    std::cout << "Creating terrain..." << std::endl;
-    TerrainChunk terrain(0, 0, BiomeType::GRASSLAND); // Start with grassland at origin
-    terrain.generate();
-    terrain.createBuffers();
-    
-    // Test different biomes (press 1-4 to switch)
-    BiomeType currentBiome = BiomeType::GRASSLAND;
-    int biomeIndex = 0;
+    // Create chunk manager and player
+    std::cout << "Creating chunk manager..." << std::endl;
+    ChunkManager chunkManager;
     
     std::cout << "Creating player..." << std::endl;
     Player player;
-    player.position = {0.0f, terrain.getHeightAt(0.0f, 0.0f) + player.size - 5.0f, 0.0f};
+    player.position = {0.0f, 0.0f, 0.0f}; // Will be set properly after first chunk load
+    
+    // Load initial chunks around player
+    chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
+    player.position.y = chunkManager.getHeightAt(0.0f, 0.0f) + player.size - 5.0f;
     
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
@@ -1009,7 +1013,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Q/E  - Move up/down" << std::endl;
     std::cout << "Left click and drag - Rotate camera" << std::endl;
     std::cout << "Right click - Move player to terrain location" << std::endl;
-    std::cout << "1-4 Keys - Switch biomes (1=Desert, 2=Mountains, 3=Swamp, 4=Grassland)" << std::endl;
     std::cout << "ESC  - Exit" << std::endl;
     std::cout << "===================" << std::endl;
     
@@ -1045,26 +1048,6 @@ int main(int argc, char* argv[]) {
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_ESCAPE) {
                     quit = true;
-                }
-                // Biome switching with number keys 1-4
-                else if (event.key.key >= SDLK_1 && event.key.key <= SDLK_4) {
-                    biomeIndex = event.key.key - SDLK_1;
-                    BiomeType newBiome = static_cast<BiomeType>(biomeIndex);
-                    
-                    if (newBiome != currentBiome) {
-                        currentBiome = newBiome;
-                        
-                        // Regenerate terrain with new biome
-                        terrain = TerrainChunk(0, 0, newBiome);
-                        terrain.generate();
-                        terrain.createBuffers();
-                        
-                        // Reset player position
-                        player.position = {0.0f, terrain.getHeightAt(0.0f, 0.0f) + player.size - 5.0f, 0.0f};
-                        player.hasTarget = false;
-                        
-                        std::cout << "Switched to " << terrain.getBiomeName() << " biome!" << std::endl;
-                    }
                 }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
@@ -1179,8 +1162,8 @@ int main(int argc, char* argv[]) {
             std::cout << "Right-click detected! Window size: " << currentWidth << "x" << currentHeight << std::endl;
             Ray ray = createRayFromMouse(pendingMouseX, pendingMouseY, currentWidth, currentHeight, view, proj);
             bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
-            if (rayTerrainIntersection(ray, terrain, hitPoint)) {
-                player.setTarget(hitPoint.x, hitPoint.z, terrain);
+            if (rayTerrainIntersection(ray, chunkManager, hitPoint)) {
+                player.setTarget(hitPoint.x, hitPoint.z, chunkManager);
                 std::cout << "Player moving to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
             } else {
                 std::cout << "No terrain intersection found!" << std::endl;
@@ -1188,15 +1171,12 @@ int main(int argc, char* argv[]) {
             hasPendingClick = false;
         }
         
-        // Update player
-        player.update(terrain);
+        // Update player and chunks
+        player.update(chunkManager);
+        chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
         
-        // Render terrain (moved down to avoid intersecting with cubes)
-        float terrainMatrix[16], terrainTranslation[16];
-        bx::mtxTranslate(terrainTranslation, 0.0f, -5.0f, 0.0f);
-        bx::mtxIdentity(terrainMatrix);
-        bx::mtxMul(terrainMatrix, terrainMatrix, terrainTranslation);
-        render_object_at_position(terrain.vbh, terrain.ibh, texProgram, proceduralTexture, s_texColor, terrainMatrix);
+        // Render all loaded terrain chunks
+        chunkManager.renderChunks(texProgram, proceduralTexture, s_texColor);
         
         // Render player as a colored cube
         float playerMatrix[16], playerTranslation[16], playerScale[16];
