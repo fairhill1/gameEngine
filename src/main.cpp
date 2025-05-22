@@ -204,6 +204,9 @@ public:
         generateBiomeTerrain();
         generateIndices();
         
+        // Validate chunk geometry
+        validateChunkGeometry();
+        
         std::cout << "Generated " << getBiomeName() << " chunk (" << chunkX << ", " << chunkZ 
                   << ") with " << vertices.size() << " vertices" << std::endl;
     }
@@ -322,6 +325,59 @@ private:
             }
         }
     }
+    
+    void validateChunkGeometry() {
+        bool hasIssues = false;
+        float minY = 1000000.0f, maxY = -1000000.0f;
+        int invalidVertices = 0;
+        
+        // Check for invalid vertices
+        for (size_t i = 0; i < vertices.size(); i++) {
+            const auto& v = vertices[i];
+            
+            // Check for NaN or infinite values
+            if (!std::isfinite(v.x) || !std::isfinite(v.y) || !std::isfinite(v.z)) {
+                std::cerr << "ERROR: Chunk (" << chunkX << ", " << chunkZ << ") vertex " << i 
+                          << " has invalid position: (" << v.x << ", " << v.y << ", " << v.z << ")" << std::endl;
+                invalidVertices++;
+                hasIssues = true;
+            }
+            
+            // Track height bounds
+            if (std::isfinite(v.y)) {
+                minY = bx::min(minY, v.y);
+                maxY = bx::max(maxY, v.y);
+            }
+            
+            // Check for extreme positions
+            if (bx::abs(v.x) > 10000.0f || bx::abs(v.z) > 10000.0f) {
+                std::cerr << "WARNING: Chunk (" << chunkX << ", " << chunkZ << ") vertex " << i 
+                          << " at extreme position: (" << v.x << ", " << v.y << ", " << v.z << ")" << std::endl;
+                hasIssues = true;
+            }
+        }
+        
+        // Check height range
+        float heightRange = maxY - minY;
+        if (heightRange > 100.0f) {
+            std::cerr << "WARNING: Chunk (" << chunkX << ", " << chunkZ << ") has extreme height range: " 
+                      << minY << " to " << maxY << " (range: " << heightRange << ")" << std::endl;
+            hasIssues = true;
+        }
+        
+        // Check indices
+        for (size_t i = 0; i < indices.size(); i++) {
+            if (indices[i] >= vertices.size()) {
+                std::cerr << "ERROR: Chunk (" << chunkX << ", " << chunkZ << ") index " << i 
+                          << " value " << indices[i] << " exceeds vertex count " << vertices.size() << std::endl;
+                hasIssues = true;
+            }
+        }
+        
+        if (hasIssues) {
+            std::cerr << "CHUNK VALIDATION FAILED for (" << chunkX << ", " << chunkZ << ")" << std::endl;
+        }
+    }
 
 public:
     const char* getBiomeName() const {
@@ -335,6 +391,12 @@ public:
     }
     
     void createBuffers() {
+        if (vertices.empty() || indices.empty()) {
+            std::cerr << "ERROR: Chunk (" << chunkX << ", " << chunkZ << ") has empty vertices or indices!" << std::endl;
+            std::cerr << "Vertices: " << vertices.size() << ", Indices: " << indices.size() << std::endl;
+            return;
+        }
+        
         const bgfx::Memory* vertexMem = bgfx::copy(vertices.data(), vertices.size() * sizeof(TerrainVertex));
         const bgfx::Memory* indexMem = bgfx::copy(indices.data(), indices.size() * sizeof(uint16_t));
         
@@ -347,8 +409,22 @@ public:
         vbh = bgfx::createVertexBuffer(vertexMem, terrainLayout);
         ibh = bgfx::createIndexBuffer(indexMem);
         
+        // Check if buffer creation succeeded
+        if (!bgfx::isValid(vbh)) {
+            std::cerr << "ERROR: Failed to create vertex buffer for chunk (" << chunkX << ", " << chunkZ << ")" << std::endl;
+        }
+        if (!bgfx::isValid(ibh)) {
+            std::cerr << "ERROR: Failed to create index buffer for chunk (" << chunkX << ", " << chunkZ << ")" << std::endl;
+        }
+        
         // Create biome-specific texture
         texture = create_biome_texture(biome);
+        if (!bgfx::isValid(texture)) {
+            std::cerr << "ERROR: Failed to create texture for chunk (" << chunkX << ", " << chunkZ << ")" << std::endl;
+        } else {
+            std::cout << "Successfully created " << getBiomeName() << " chunk (" << chunkX << ", " << chunkZ 
+                      << ") with " << vertices.size() << " vertices and " << indices.size() << " indices" << std::endl;
+        }
     }
     
     float getHeightAt(float worldX, float worldZ) const {
@@ -400,7 +476,10 @@ private:
     
     // Helper function to convert chunk coordinates to unique key
     uint64_t getChunkKey(int chunkX, int chunkZ) const {
-        return (uint64_t(chunkX) << 32) | uint64_t(chunkZ);
+        // Handle negative coordinates properly by treating as signed
+        uint64_t x = static_cast<uint64_t>(static_cast<uint32_t>(chunkX));
+        uint64_t z = static_cast<uint64_t>(static_cast<uint32_t>(chunkZ));
+        return (x << 32) | z;
     }
     
     // Determine biome for a chunk based on its world coordinates
@@ -474,8 +553,41 @@ public:
     
     // Render all loaded chunks
     void renderChunks(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform) {
+        int renderedChunks = 0;
+        int skippedChunks = 0;
+        static int debugFrameCount = 0;
+        bool shouldDebug = (debugFrameCount % 300 == 0); // Debug every 5 seconds at 60fps
+        
+        if (shouldDebug) {
+            std::cout << "\n=== CHUNK RENDER DEBUG ===" << std::endl;
+            std::cout << "Total loaded chunks: " << loadedChunks.size() << std::endl;
+        }
+        
         for (const auto& pair : loadedChunks) {
             const auto& chunk = pair.second;
+            
+            // Debug chunk info
+            if (shouldDebug) {
+                float worldX = chunk->chunkX * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                float worldZ = chunk->chunkZ * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE;
+                std::cout << "Chunk (" << chunk->chunkX << ", " << chunk->chunkZ << ") -> World pos (" 
+                          << worldX << ", " << worldZ << ") - " << chunk->getBiomeName();
+            }
+            
+            // Skip chunks with invalid buffers
+            if (!bgfx::isValid(chunk->vbh) || !bgfx::isValid(chunk->ibh) || !bgfx::isValid(chunk->texture)) {
+                if (shouldDebug) {
+                    std::cout << " - SKIPPED (invalid buffers: vbh=" << bgfx::isValid(chunk->vbh) 
+                              << ", ibh=" << bgfx::isValid(chunk->ibh) 
+                              << ", tex=" << bgfx::isValid(chunk->texture) << ")" << std::endl;
+                }
+                skippedChunks++;
+                continue;
+            }
+            
+            if (shouldDebug) {
+                std::cout << " - RENDERED" << std::endl;
+            }
             
             // Create transform matrix for chunk
             float chunkMatrix[16], translation[16];
@@ -485,7 +597,15 @@ public:
             
             // Render this chunk with its biome-specific texture
             render_object_at_position(chunk->vbh, chunk->ibh, program, chunk->texture, texUniform, chunkMatrix);
+            renderedChunks++;
         }
+        
+        if (shouldDebug) {
+            std::cout << "Rendered: " << renderedChunks << ", Skipped: " << skippedChunks << std::endl;
+            std::cout << "=========================" << std::endl;
+        }
+        
+        debugFrameCount++;
     }
     
     // Get chunk info for debugging
@@ -501,21 +621,28 @@ public:
     
 private:
     void loadChunksAroundPlayer() {
+        std::cout << "Loading chunks in " << (2*RENDER_DISTANCE+1) << "x" << (2*RENDER_DISTANCE+1) 
+                  << " grid around player chunk (" << playerChunkX << ", " << playerChunkZ << ")" << std::endl;
+        
         for (int z = playerChunkZ - RENDER_DISTANCE; z <= playerChunkZ + RENDER_DISTANCE; z++) {
             for (int x = playerChunkX - RENDER_DISTANCE; x <= playerChunkX + RENDER_DISTANCE; x++) {
                 uint64_t key = getChunkKey(x, z);
                 
                 // Only create chunk if it doesn't exist
                 if (loadedChunks.find(key) == loadedChunks.end()) {
+                    std::cout << "  Loading chunk (" << x << ", " << z << ")" << std::endl;
                     BiomeType biome = getBiomeForChunk(x, z);
                     auto chunk = std::make_unique<TerrainChunk>(x, z, biome);
                     chunk->generate();
                     chunk->createBuffers();
                     
                     loadedChunks[key] = std::move(chunk);
+                } else {
+                    std::cout << "  Chunk (" << x << ", " << z << ") already exists" << std::endl;
                 }
             }
         }
+        std::cout << "Finished loading chunks. Total loaded: " << loadedChunks.size() << std::endl;
     }
     
     void unloadDistantChunks() {
