@@ -11,6 +11,7 @@ A cross-platform 3D game engine built in C++17 using BGFX renderer, SDL3 windowi
 - **3D Models**: TinyGLTF for .glb/.gltf file loading
 - **Textures**: STB_Image for PNG/JPEG loading with procedural generation
 - **Math**: BX math library for matrices and transformations
+- **Terrain**: Procedural chunk-based world generation with biomes
 
 ### File Structure
 ```
@@ -35,8 +36,8 @@ CMakeLists.txt        # Build configuration
 2. **Procedural Textured Cube** (right) - Generated sandy texture
 3. **PNG Textured Cube** (top) - Loaded high-res texture
 4. **Garden Lamp Model** (center) - Working glTF model with proper vertex parsing
-5. **Smooth Terrain** (ground) - Multi-octave noise with bilinear interpolation
-6. **Player Cube** - Movable character that follows terrain height
+5. **Procedural Terrain System** - Infinite world with 4 distinct biomes
+6. **Player Cube** - Movable character with terrain following and ray-cast movement
 
 ## Unified Rendering Architecture
 
@@ -110,6 +111,134 @@ Ray createRayFromMouse(float mouseX, float mouseY, int screenWidth, int screenHe
 - Don't forget Y-flip for screen coordinates 
 - Don't use regular matrix multiplication - use `bx::mulH()` for proper perspective divide
 - Account for terrain Y-offset when doing intersection tests
+
+## Procedural Terrain & Biome System
+
+### Architecture Overview
+The game features an **infinite procedural world** with seamless chunk-based generation supporting 4 distinct biomes. The terrain system provides continuous, smooth landscapes without visible boundaries.
+
+### Core Classes
+
+#### TerrainChunk
+```cpp
+class TerrainChunk {
+    static constexpr int CHUNK_SIZE = 64;           // 64x64 grid per chunk
+    static constexpr float SCALE = 0.5f;            // World units per vertex
+    static constexpr float HEIGHT_SCALE = 3.0f;     // Vertical scaling factor
+    
+    BiomeType biome;                                // Chunk's primary biome
+    int chunkX, chunkZ;                            // World chunk coordinates
+    std::vector<TerrainVertex> vertices;           // 65x65 vertices (overlapping edges)
+    std::vector<uint16_t> indices;                 // Triangle indices
+    bgfx::VertexBufferHandle vbh, ibh;            // GPU buffers
+};
+```
+
+#### ChunkManager
+```cpp
+class ChunkManager {
+    static constexpr int RENDER_DISTANCE = 2;      // 5x5 chunk grid around player
+    
+    std::unordered_map<uint64_t, std::unique_ptr<TerrainChunk>> loadedChunks;
+    void updateChunksAroundPlayer(float playerX, float playerZ);
+    float getHeightAt(float worldX, float worldZ) const;
+    void renderChunks(/* shader params */);
+};
+```
+
+### Biome Types & Characteristics
+
+1. **Desert**
+   - Flat terrain with gentle sand dunes
+   - Height variation: 1.2x base + dune features
+   - Characteristics: Rolling sandy terrain with fine texture details
+
+2. **Mountains** 
+   - High elevation with dramatic steep variations
+   - Height variation: 2.5x base + 8.0f elevation + sharp peaks
+   - Characteristics: Tallest biome with rocky ridges and sharp details
+
+3. **Swamp**
+   - Low-lying, mostly flat marshland  
+   - Height variation: 0.4x base - 1.0f (below sea level)
+   - Characteristics: Subtle bumps and marshland texture
+
+4. **Grassland**
+   - Rolling hills with moderate variation
+   - Height variation: 1.5x base + rolling features
+   - Characteristics: Gentle rolling terrain, good for settlements
+
+### Seamless World Generation
+
+#### Global Noise System
+```cpp
+float getGlobalNoise(float worldX, float worldZ) const {
+    // Multi-octave noise using world coordinates for consistency
+    float noise = 0.0f;
+    noise += bx::sin(worldX * 0.01f) * bx::cos(worldZ * 0.012f) * 1.0f;      // Large features
+    noise += bx::sin(worldX * 0.03f + worldZ * 0.02f) * 0.5f;                // Medium features  
+    noise += bx::sin(worldX * 0.08f) * bx::cos(worldZ * 0.075f) * 0.25f;     // Fine detail
+    noise += bx::sin(worldX * 0.15f + worldZ * 0.12f) * 0.125f;              // Very fine detail
+    return noise * 0.4f;
+}
+```
+
+#### Biome Assignment
+```cpp
+BiomeType getBiomeAtWorldPos(float worldX, float worldZ) const {
+    // Very large scale noise for big continuous biome regions
+    float biomeNoise = bx::sin(worldX * 0.001f) * bx::cos(worldZ * 0.0008f);
+    biomeNoise += bx::sin(worldX * 0.0005f + worldZ * 0.0007f) * 0.3f;
+    
+    if (biomeNoise < -0.3f) return BiomeType::SWAMP;
+    if (biomeNoise < -0.1f) return BiomeType::DESERT; 
+    if (biomeNoise < 0.2f) return BiomeType::GRASSLAND;
+    return BiomeType::MOUNTAINS;
+}
+```
+
+### Chunk Boundary Stitching
+
+**CRITICAL**: Prevents visible seams between chunks by ensuring shared vertices:
+
+- **Vertex Grid**: Each chunk generates 65x65 vertices (not 64x64)
+- **Overlapping Edges**: Adjacent chunks share vertices at their boundaries
+- **Consistent Generation**: Same world coordinates always produce identical vertices
+- **Index Mapping**: Updated to `vertexRowSize = CHUNK_SIZE + 1` for proper triangle generation
+
+```cpp
+// Chunk (0,0) generates vertices from world pos (0,0) to (64,64)
+// Chunk (1,0) generates vertices from world pos (64,0) to (128,64)
+// Shared edge at X=64 ensures seamless connection
+```
+
+### Dynamic Loading System
+
+- **5x5 Chunk Grid**: RENDER_DISTANCE=2 loads chunks around player
+- **Memory Management**: Distant chunks automatically unloaded
+- **Hash Map Storage**: 64-bit keys for fast chunk lookup: `(chunkX << 32) | chunkZ`
+- **Player Tracking**: Chunks load/unload as player moves between chunk boundaries
+
+### Height Sampling & Ray Casting
+
+- **Cross-Chunk Queries**: ChunkManager handles height queries across chunk boundaries
+- **Bilinear Interpolation**: Smooth height sampling between vertices
+- **Ray-Terrain Intersection**: BGFX-compatible ray casting with terrain offset handling
+- **Player Movement**: Right-click to move player with accurate terrain following
+
+### Performance Characteristics
+
+- **Chunk Size**: 64x64 = 4,096 vertices, ~8,000 triangles per chunk
+- **Memory**: ~25 chunks loaded simultaneously (5x5 grid)
+- **Generation**: Deterministic - same coordinates always produce same terrain
+- **Rendering**: Unified rendering pipeline through `render_object_at_position()`
+
+### Key Technical Lessons
+
+1. **World Coordinate Consistency**: All noise functions use world coordinates, not local chunk coordinates
+2. **Vertex Overlap**: Extra vertices at chunk edges essential for seamless stitching  
+3. **Biome Scale**: Very large wavelengths (0.001f) needed for continuous biome regions
+4. **Index Management**: Proper vertex row size calculation critical for GPU buffer correctness
 
 ### Critical glTF Parsing Lessons Learned
 **IMPORTANT**: When debugging model loading issues:
@@ -187,3 +316,7 @@ make && ./MyFirstCppGame
 2. Add normal mapping support
 3. Implement proper 3D model shaders with lighting
 4. Add more primitive shapes to model system
+5. Implement biome transition blending at chunk boundaries
+6. Add procedural settlement/structure generation in biomes
+7. Optimize chunk loading with background threading
+8. Add LOD (Level of Detail) system for distant chunks

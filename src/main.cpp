@@ -160,6 +160,9 @@ enum class BiomeType {
     GRASSLAND    // Rolling hills, moderate variation
 };
 
+// Forward declaration for biome texture function
+bgfx::TextureHandle create_biome_texture(BiomeType biome);
+
 // Terrain system
 struct TerrainVertex {
     float x, y, z;
@@ -178,11 +181,19 @@ public:
     std::vector<uint16_t> indices;
     bgfx::VertexBufferHandle vbh;
     bgfx::IndexBufferHandle ibh;
+    bgfx::TextureHandle texture;  // Biome-specific texture
     
     TerrainChunk(int cx, int cz, BiomeType biomeType) 
         : chunkX(cx), chunkZ(cz), biome(biomeType) {
         vbh = BGFX_INVALID_HANDLE;
         ibh = BGFX_INVALID_HANDLE;
+        texture = BGFX_INVALID_HANDLE;
+    }
+    
+    ~TerrainChunk() {
+        if (bgfx::isValid(vbh)) bgfx::destroy(vbh);
+        if (bgfx::isValid(ibh)) bgfx::destroy(ibh);
+        if (bgfx::isValid(texture)) bgfx::destroy(texture);
     }
     
     void generate() {
@@ -198,55 +209,47 @@ public:
     }
     
 private:
+    // Global noise function that works across chunk boundaries
+    float getGlobalNoise(float worldX, float worldZ) const {
+        // Multiple octaves of noise for better variation
+        float noise = 0.0f;
+        
+        // Large scale features (octave 1)
+        noise += bx::sin(worldX * 0.01f) * bx::cos(worldZ * 0.012f) * 1.0f;
+        
+        // Medium scale features (octave 2)  
+        noise += bx::sin(worldX * 0.03f + worldZ * 0.02f) * 0.5f;
+        
+        // Fine detail (octave 3)
+        noise += bx::sin(worldX * 0.08f) * bx::cos(worldZ * 0.075f) * 0.25f;
+        
+        // Very fine detail (octave 4)
+        noise += bx::sin(worldX * 0.15f + worldZ * 0.12f) * 0.125f;
+        
+        return noise * 0.4f; // Scale down total amplitude
+    }
+    
     void generateBiomeTerrain() {
-        // Use chunk coordinates as seed for consistent generation
-        std::mt19937 gen(chunkX * 1000 + chunkZ);
-        std::uniform_real_distribution<float> dis(0.0f, 1.0f);
-        
-        // Pre-generate smooth noise values
-        std::vector<std::vector<float>> noiseMap(CHUNK_SIZE, std::vector<float>(CHUNK_SIZE));
-        
-        const int noiseRes = 8;
-        std::vector<std::vector<float>> baseNoise(noiseRes + 1, std::vector<float>(noiseRes + 1));
-        
-        for (int z = 0; z <= noiseRes; z++) {
-            for (int x = 0; x <= noiseRes; x++) {
-                baseNoise[x][z] = dis(gen) - 0.5f;
-            }
-        }
-        
-        // Interpolate noise to full resolution
-        for (int z = 0; z < CHUNK_SIZE; z++) {
-            for (int x = 0; x < CHUNK_SIZE; x++) {
-                float fx = float(x) / float(CHUNK_SIZE - 1) * noiseRes;
-                float fz = float(z) / float(CHUNK_SIZE - 1) * noiseRes;
-                
-                int x1 = int(fx), z1 = int(fz);
-                int x2 = bx::min(x1 + 1, noiseRes), z2 = bx::min(z1 + 1, noiseRes);
-                
-                float fracX = fx - x1, fracZ = fz - z1;
-                
-                float n1 = baseNoise[x1][z1] * (1 - fracX) + baseNoise[x2][z1] * fracX;
-                float n2 = baseNoise[x1][z2] * (1 - fracX) + baseNoise[x2][z2] * fracX;
-                noiseMap[x][z] = n1 * (1 - fracZ) + n2 * fracZ;
-            }
-        }
+        // Generate vertices using global world coordinates for seamless transitions
         
         // Generate vertices with biome-specific height patterns
-        for (int z = 0; z < CHUNK_SIZE; z++) {
-            for (int x = 0; x < CHUNK_SIZE; x++) {
-                // Calculate world position for this chunk
-                float worldX = (chunkX * CHUNK_SIZE + x - CHUNK_SIZE/2) * SCALE;
-                float worldZ = (chunkZ * CHUNK_SIZE + z - CHUNK_SIZE/2) * SCALE;
+        // Generate vertices including one extra row/column for seamless stitching
+        for (int z = 0; z <= CHUNK_SIZE; z++) {
+            for (int x = 0; x <= CHUNK_SIZE; x++) {
+                // Calculate world position for this chunk vertex
+                float worldX = (chunkX * CHUNK_SIZE + x) * SCALE;
+                float worldZ = (chunkZ * CHUNK_SIZE + z) * SCALE;
                 
-                float height = generateBiomeHeight(noiseMap[x][z], worldX, worldZ);
+                // Use global noise for seamless chunk transitions
+                float globalNoise = getGlobalNoise(worldX, worldZ);
+                float height = generateBiomeHeight(globalNoise, worldX, worldZ);
                 
                 TerrainVertex vertex;
                 vertex.x = worldX;
                 vertex.y = height;
                 vertex.z = worldZ;
-                vertex.u = float(x) / (CHUNK_SIZE - 1);
-                vertex.v = float(z) / (CHUNK_SIZE - 1);
+                vertex.u = float(x) / CHUNK_SIZE;
+                vertex.v = float(z) / CHUNK_SIZE;
                 
                 vertices.push_back(vertex);
             }
@@ -256,30 +259,42 @@ private:
     float generateBiomeHeight(float baseNoise, float worldX, float worldZ) {
         float height = 0.0f;
         
+        // Add secondary global noise layers for more detail (using world coordinates)
+        float detailNoise1 = bx::sin(worldX * 0.05f) * bx::cos(worldZ * 0.04f);
+        float detailNoise2 = bx::sin(worldX * 0.12f + worldZ * 0.1f);
+        float fineNoise = bx::sin(worldX * 0.25f) * bx::cos(worldZ * 0.22f);
+        
         switch (biome) {
             case BiomeType::DESERT:
                 // Flat with occasional dunes
-                height = baseNoise * HEIGHT_SCALE * 0.3f;
-                height += bx::sin(worldX * 0.02f) * HEIGHT_SCALE * 0.2f;
+                height = baseNoise * HEIGHT_SCALE * 1.2f;
+                height += detailNoise1 * HEIGHT_SCALE * 0.3f; // Sand dunes
+                height += fineNoise * HEIGHT_SCALE * 0.1f; // Fine sand ripples
                 break;
                 
             case BiomeType::MOUNTAINS:
                 // High elevation with steep variations
-                height = (baseNoise + 0.5f) * HEIGHT_SCALE * 1.5f;
-                height += bx::sin(worldX * 0.1f) * bx::cos(worldZ * 0.1f) * HEIGHT_SCALE * 0.8f;
-                height += 5.0f; // Base mountain elevation
+                height = (baseNoise + 0.2f) * HEIGHT_SCALE * 2.5f;
+                height += detailNoise1 * HEIGHT_SCALE * 1.2f; // Mountain ridges
+                height += detailNoise2 * HEIGHT_SCALE * 0.6f; // Rocky details
+                height += fineNoise * HEIGHT_SCALE * 0.3f; // Sharp peaks
+                height += 8.0f; // Base mountain elevation
                 break;
                 
             case BiomeType::SWAMP:
-                // Low, flat terrain
-                height = baseNoise * HEIGHT_SCALE * 0.2f;
-                height -= 2.0f; // Below sea level
+                // Low, flat terrain with small variations
+                height = baseNoise * HEIGHT_SCALE * 0.4f;
+                height += detailNoise2 * HEIGHT_SCALE * 0.15f; // Marshland bumps
+                height += fineNoise * HEIGHT_SCALE * 0.05f; // Subtle texture
+                height -= 1.0f; // Slightly below sea level
                 break;
                 
             case BiomeType::GRASSLAND:
-                // Rolling hills
-                height = baseNoise * HEIGHT_SCALE * 0.8f;
-                height += bx::sin(worldX * 0.05f) * bx::cos(worldZ * 0.05f) * HEIGHT_SCALE * 0.3f;
+                // Rolling hills with good variation
+                height = baseNoise * HEIGHT_SCALE * 1.5f;
+                height += detailNoise1 * HEIGHT_SCALE * 0.8f; // Rolling hills
+                height += detailNoise2 * HEIGHT_SCALE * 0.4f; // Medium features
+                height += fineNoise * HEIGHT_SCALE * 0.2f; // Small details
                 break;
         }
         
@@ -287,13 +302,15 @@ private:
     }
     
     void generateIndices() {
-        // Generate indices for triangles (same as before)
-        for (int z = 0; z < CHUNK_SIZE - 1; z++) {
-            for (int x = 0; x < CHUNK_SIZE - 1; x++) {
-                int topLeft = z * CHUNK_SIZE + x;
-                int topRight = z * CHUNK_SIZE + (x + 1);
-                int bottomLeft = (z + 1) * CHUNK_SIZE + x;
-                int bottomRight = (z + 1) * CHUNK_SIZE + (x + 1);
+        // Generate indices for triangles with new vertex grid size
+        const int vertexRowSize = CHUNK_SIZE + 1; // Account for extra row/column
+        
+        for (int z = 0; z < CHUNK_SIZE; z++) {
+            for (int x = 0; x < CHUNK_SIZE; x++) {
+                int topLeft = z * vertexRowSize + x;
+                int topRight = z * vertexRowSize + (x + 1);
+                int bottomLeft = (z + 1) * vertexRowSize + x;
+                int bottomRight = (z + 1) * vertexRowSize + (x + 1);
                 
                 indices.push_back(topLeft);
                 indices.push_back(bottomLeft);
@@ -329,31 +346,35 @@ public:
         
         vbh = bgfx::createVertexBuffer(vertexMem, terrainLayout);
         ibh = bgfx::createIndexBuffer(indexMem);
+        
+        // Create biome-specific texture
+        texture = create_biome_texture(biome);
     }
     
     float getHeightAt(float worldX, float worldZ) const {
         // Convert world coordinates to local chunk coordinates
-        float localX = worldX / SCALE - (chunkX * CHUNK_SIZE - CHUNK_SIZE/2);
-        float localZ = worldZ / SCALE - (chunkZ * CHUNK_SIZE - CHUNK_SIZE/2);
+        float localX = worldX / SCALE - (chunkX * CHUNK_SIZE);
+        float localZ = worldZ / SCALE - (chunkZ * CHUNK_SIZE);
         
-        // Clamp to chunk bounds
-        if (localX < 0 || localX >= CHUNK_SIZE-1 || localZ < 0 || localZ >= CHUNK_SIZE-1) {
+        // Clamp to chunk bounds  
+        if (localX < 0 || localX >= CHUNK_SIZE || localZ < 0 || localZ >= CHUNK_SIZE) {
             return 0.0f;
         }
         
         int x1 = (int)localX;
         int z1 = (int)localZ;
-        int x2 = x1 + 1;
-        int z2 = z1 + 1;
+        int x2 = bx::min(x1 + 1, CHUNK_SIZE);
+        int z2 = bx::min(z1 + 1, CHUNK_SIZE);
         
         float fx = localX - x1;
         float fz = localZ - z1;
         
-        // Get heights at four corners
-        float h1 = vertices[z1 * CHUNK_SIZE + x1].y;
-        float h2 = vertices[z1 * CHUNK_SIZE + x2].y;
-        float h3 = vertices[z2 * CHUNK_SIZE + x1].y;
-        float h4 = vertices[z2 * CHUNK_SIZE + x2].y;
+        // Get heights at four corners (with new vertex row size)
+        const int vertexRowSize = CHUNK_SIZE + 1;
+        float h1 = vertices[z1 * vertexRowSize + x1].y;
+        float h2 = vertices[z1 * vertexRowSize + x2].y;
+        float h3 = vertices[z2 * vertexRowSize + x1].y;
+        float h4 = vertices[z2 * vertexRowSize + x2].y;
         
         // Bilinear interpolation
         float top = h1 * (1 - fx) + h2 * fx;
@@ -384,13 +405,20 @@ private:
     
     // Determine biome for a chunk based on its world coordinates
     BiomeType getBiomeForChunk(int chunkX, int chunkZ) const {
-        // Simple noise-based biome assignment
-        float biomeNoise = bx::sin(chunkX * 0.3f) * bx::cos(chunkZ * 0.2f);
-        biomeNoise += bx::sin(chunkX * 0.1f + chunkZ * 0.15f) * 0.5f;
+        return getBiomeAtWorldPos(chunkX * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE, 
+                                  chunkZ * TerrainChunk::CHUNK_SIZE * TerrainChunk::SCALE);
+    }
+    
+    // Get biome at any world position (used for blending)
+    BiomeType getBiomeAtWorldPos(float worldX, float worldZ) const {
+        // Use very large scale for biome assignment to create big continuous regions
+        float biomeNoise = bx::sin(worldX * 0.001f) * bx::cos(worldZ * 0.0008f);
+        biomeNoise += bx::sin(worldX * 0.0005f + worldZ * 0.0007f) * 0.3f;
         
-        if (biomeNoise < -0.5f) return BiomeType::SWAMP;
-        if (biomeNoise < 0.0f) return BiomeType::DESERT;
-        if (biomeNoise < 0.5f) return BiomeType::GRASSLAND;
+        // Smoother thresholds for gradual transitions
+        if (biomeNoise < -0.3f) return BiomeType::SWAMP;
+        if (biomeNoise < -0.1f) return BiomeType::DESERT; 
+        if (biomeNoise < 0.2f) return BiomeType::GRASSLAND;
         return BiomeType::MOUNTAINS;
     }
     
@@ -434,7 +462,7 @@ public:
     }
     
     // Render all loaded chunks
-    void renderChunks(bgfx::ProgramHandle program, bgfx::TextureHandle texture, bgfx::UniformHandle texUniform) {
+    void renderChunks(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform) {
         for (const auto& pair : loadedChunks) {
             const auto& chunk = pair.second;
             
@@ -444,8 +472,8 @@ public:
             bx::mtxIdentity(chunkMatrix);
             bx::mtxMul(chunkMatrix, chunkMatrix, translation);
             
-            // Render this chunk
-            render_object_at_position(chunk->vbh, chunk->ibh, program, texture, texUniform, chunkMatrix);
+            // Render this chunk with its biome-specific texture
+            render_object_at_position(chunk->vbh, chunk->ibh, program, chunk->texture, texUniform, chunkMatrix);
         }
     }
     
@@ -502,17 +530,20 @@ struct Player {
     bx::Vec3 position;
     bx::Vec3 targetPosition;
     bool hasTarget;
+    bool isSprinting;
     float moveSpeed;
+    float sprintSpeed;
     float size;
     
     Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
-               hasTarget(false), moveSpeed(0.05f), size(0.3f) {}
+               hasTarget(false), isSprinting(false), moveSpeed(0.05f), sprintSpeed(0.15f), size(0.3f) {}
     
-    void setTarget(float x, float z, const ChunkManager& chunkManager) {
+    void setTarget(float x, float z, const ChunkManager& chunkManager, bool sprint = false) {
         targetPosition.x = x;
         targetPosition.z = z;
         targetPosition.y = chunkManager.getHeightAt(x, z) + size - 5.0f; // Account for terrain offset
         hasTarget = true;
+        isSprinting = sprint;
     }
     
     void update(const ChunkManager& chunkManager) {
@@ -528,12 +559,14 @@ struct Player {
             if (distance < 0.1f) {
                 position = targetPosition;
                 hasTarget = false;
+                isSprinting = false;
             } else {
                 direction.x /= distance;
                 direction.z /= distance;
                 
-                position.x += direction.x * moveSpeed;
-                position.z += direction.z * moveSpeed;
+                float currentSpeed = isSprinting ? sprintSpeed : moveSpeed;
+                position.x += direction.x * currentSpeed;
+                position.z += direction.z * currentSpeed;
                 position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
             }
         }
@@ -688,9 +721,12 @@ bgfx::TextureHandle load_png_texture(const char* filePath) {
     return handle;
 }
 
-// Create procedural texture
-bgfx::TextureHandle create_procedural_texture() {
-    std::cout << "Creating procedural texture..." << std::endl;
+// Create biome-specific procedural texture
+bgfx::TextureHandle create_biome_texture(BiomeType biome) {
+    std::cout << "Creating " << (biome == BiomeType::DESERT ? "sand" : 
+                                biome == BiomeType::GRASSLAND ? "light green" :
+                                biome == BiomeType::SWAMP ? "dark green" : "brown-gray") 
+              << " texture for biome..." << std::endl;
     
     const uint32_t textureWidth = 256;
     const uint32_t textureHeight = 256;
@@ -699,10 +735,39 @@ bgfx::TextureHandle create_procedural_texture() {
     const bgfx::Memory* texMem = bgfx::alloc(textureSize);
     uint8_t* data = texMem->data;
     
+    // Base colors for each biome
+    uint8_t baseR, baseG, baseB;
+    uint8_t minR, maxR, minG, maxG, minB, maxB;
+    
+    switch (biome) {
+        case BiomeType::DESERT:
+            // Sandy colors
+            baseR = 220; baseG = 185; baseB = 140;
+            minR = 160; maxR = 240; minG = 130; maxG = 210; minB = 100; maxB = 170;
+            break;
+        case BiomeType::GRASSLAND:
+            // Light green colors
+            baseR = 100; baseG = 180; baseB = 80;
+            minR = 80; maxR = 140; minG = 150; maxG = 220; minB = 60; maxB = 120;
+            break;
+        case BiomeType::SWAMP:
+            // Dark green colors
+            baseR = 60; baseG = 120; baseB = 50;
+            minR = 40; maxR = 90; minG = 90; maxG = 150; minB = 30; maxB = 80;
+            break;
+        case BiomeType::MOUNTAINS:
+            // Brown-gray colors
+            baseR = 140; baseG = 120; baseB = 100;
+            minR = 100; maxR = 180; minG = 90; maxG = 150; minB = 70; maxB = 130;
+            break;
+    }
+    
     // Create grain patterns
     std::vector<std::vector<float>> grainPattern(textureWidth, std::vector<float>(textureHeight, 0.0f));
     
-    for (int i = 0; i < 200; ++i) {
+    int grainCount = (biome == BiomeType::SWAMP || biome == BiomeType::GRASSLAND) ? 150 : 200;
+    
+    for (int i = 0; i < grainCount; ++i) {
         int grainX = rand() % textureWidth;
         int grainY = rand() % textureHeight;
         int grainSize = 3 + (rand() % 4);
@@ -724,23 +789,41 @@ bgfx::TextureHandle create_procedural_texture() {
         }
     }
     
-    // Generate texture pixels
+    // Generate texture pixels with biome-specific patterns
     for (uint32_t y = 0; y < textureHeight; ++y) {
         for (uint32_t x = 0; x < textureWidth; ++x) {
             uint32_t offset = (y * textureWidth + x) * 4;
             
-            uint8_t r = 220, g = 185, b = 140;
+            uint8_t r = baseR, g = baseG, b = baseB;
             uint8_t microNoise = (uint8_t)((rand() % 20) - 10);
             
             float grainValue = bx::clamp(grainPattern[x][y], 0.0f, 1.0f);
             float darkening = 1.0f - (grainValue * 0.3f);
             
-            bool isDarkerBand = ((y / 12) % 2) == 0;
-            float bandFactor = isDarkerBand ? 0.9f : 1.0f;
+            // Biome-specific patterns
+            float patternFactor = 1.0f;
+            switch (biome) {
+                case BiomeType::DESERT:
+                    // Horizontal sand dune patterns
+                    patternFactor = ((y / 12) % 2) == 0 ? 0.9f : 1.0f;
+                    break;
+                case BiomeType::GRASSLAND:
+                    // Subtle grass blade patterns
+                    patternFactor = ((x / 8 + y / 6) % 3) == 0 ? 0.95f : 1.0f;
+                    break;
+                case BiomeType::SWAMP:
+                    // Wet, muddy texture with darker spots
+                    patternFactor = ((x / 10 + y / 8) % 4) == 0 ? 0.8f : 1.0f;
+                    break;
+                case BiomeType::MOUNTAINS:
+                    // Rocky, uneven texture
+                    patternFactor = ((x / 6 + y / 9) % 3) == 0 ? 0.85f : 1.0f;
+                    break;
+            }
             
-            r = (uint8_t)bx::clamp((r * darkening * bandFactor) + microNoise, 160.0f, 240.0f);
-            g = (uint8_t)bx::clamp((g * darkening * bandFactor) + microNoise, 130.0f, 210.0f);
-            b = (uint8_t)bx::clamp((b * darkening * bandFactor) + microNoise, 100.0f, 170.0f);
+            r = (uint8_t)bx::clamp((r * darkening * patternFactor) + microNoise, (float)minR, (float)maxR);
+            g = (uint8_t)bx::clamp((g * darkening * patternFactor) + microNoise, (float)minG, (float)maxG);
+            b = (uint8_t)bx::clamp((b * darkening * patternFactor) + microNoise, (float)minB, (float)maxB);
             
             data[offset + 0] = r;
             data[offset + 1] = g;
@@ -754,6 +837,11 @@ bgfx::TextureHandle create_procedural_texture() {
     textureFlags |= BGFX_SAMPLER_MAG_ANISOTROPIC;
     
     return bgfx::createTexture2D(textureWidth, textureHeight, false, 1, bgfx::TextureFormat::RGBA8, textureFlags, texMem);
+}
+
+// Create procedural texture (legacy function for backward compatibility)
+bgfx::TextureHandle create_procedural_texture() {
+    return create_biome_texture(BiomeType::DESERT); // Default to desert/sand texture
 }
 
 // Helper function to get SDL window native data
@@ -1011,8 +1099,10 @@ int main(int argc, char* argv[]) {
     std::cout << "WASD - Move camera" << std::endl;
     std::cout << "SHIFT - Sprint (faster movement)" << std::endl;
     std::cout << "Q/E  - Move up/down" << std::endl;
+    std::cout << "1    - Jump to bird's eye view of player" << std::endl;
     std::cout << "Left click and drag - Rotate camera" << std::endl;
     std::cout << "Right click - Move player to terrain location" << std::endl;
+    std::cout << "Double right click - Sprint to terrain location" << std::endl;
     std::cout << "ESC  - Exit" << std::endl;
     std::cout << "===================" << std::endl;
     
@@ -1035,6 +1125,12 @@ int main(int argc, char* argv[]) {
     float pendingMouseX = 0.0f;
     float pendingMouseY = 0.0f;
     bool hasPendingClick = false;
+    bool shouldSprint = false;
+    
+    // Double-click detection variables
+    static const float DOUBLE_CLICK_TIME = 500.0f; // milliseconds
+    Uint64 lastRightClickTime = 0;
+    bool isDoubleClick = false;
     
     const bool* keyboardState = SDL_GetKeyboardState(NULL);
     
@@ -1049,6 +1145,28 @@ int main(int argc, char* argv[]) {
                 if (event.key.key == SDLK_ESCAPE) {
                     quit = true;
                 }
+                else if (event.key.key == SDLK_1) {
+                    // Jump to bird's eye view of player
+                    cameraPos.x = player.position.x;
+                    cameraPos.y = player.position.y + 15.0f; // Bird's eye height
+                    cameraPos.z = player.position.z + 8.0f;  // Slightly back from player
+                    
+                    // Calculate direction vector from camera to player
+                    float dirX = player.position.x - cameraPos.x;
+                    float dirY = player.position.y - cameraPos.y;
+                    float dirZ = player.position.z - cameraPos.z;
+                    
+                    // Calculate horizontal distance for pitch calculation
+                    float horizontalDist = bx::sqrt(dirX * dirX + dirZ * dirZ);
+                    
+                    // Calculate pitch (looking down at player)
+                    cameraPitch = bx::atan2(-dirY, horizontalDist);
+                    
+                    // Calculate yaw (horizontal rotation toward player)
+                    cameraYaw = bx::atan2(dirX, dirZ);
+                    
+                    std::cout << "Camera jumped to bird's eye view of player (pitch: " << cameraPitch << ", yaw: " << cameraYaw << ")" << std::endl;
+                }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
                 int width = event.window.data1;
@@ -1062,7 +1180,21 @@ int main(int argc, char* argv[]) {
                     SDL_GetMouseState(&prevMouseX, &prevMouseY);
                 }
                 else if (event.button.button == SDL_BUTTON_RIGHT) {
-                    // Right click for terrain picking
+                    // Right click for terrain picking with double-click detection
+                    Uint64 currentTime = SDL_GetTicks();
+                    
+                    if (currentTime - lastRightClickTime < DOUBLE_CLICK_TIME) {
+                        // Double-click detected
+                        isDoubleClick = true;
+                        shouldSprint = true;
+                        std::cout << "Double right-click detected - Sprint mode!" << std::endl;
+                    } else {
+                        // Single click
+                        isDoubleClick = false;
+                        shouldSprint = false;
+                    }
+                    
+                    lastRightClickTime = currentTime;
                     SDL_GetMouseState(&pendingMouseX, &pendingMouseY);
                     hasPendingClick = true;
                 }
@@ -1163,12 +1295,17 @@ int main(int argc, char* argv[]) {
             Ray ray = createRayFromMouse(pendingMouseX, pendingMouseY, currentWidth, currentHeight, view, proj);
             bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
             if (rayTerrainIntersection(ray, chunkManager, hitPoint)) {
-                player.setTarget(hitPoint.x, hitPoint.z, chunkManager);
-                std::cout << "Player moving to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+                player.setTarget(hitPoint.x, hitPoint.z, chunkManager, shouldSprint);
+                if (shouldSprint) {
+                    std::cout << "Player sprinting to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+                } else {
+                    std::cout << "Player moving to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+                }
             } else {
                 std::cout << "No terrain intersection found!" << std::endl;
             }
             hasPendingClick = false;
+            shouldSprint = false; // Reset sprint flag
         }
         
         // Update player and chunks
@@ -1176,7 +1313,7 @@ int main(int argc, char* argv[]) {
         chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
         
         // Render all loaded terrain chunks
-        chunkManager.renderChunks(texProgram, proceduralTexture, s_texColor);
+        chunkManager.renderChunks(texProgram, s_texColor);
         
         // Render player as a colored cube
         float playerMatrix[16], playerTranslation[16], playerScale[16];
