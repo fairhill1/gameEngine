@@ -38,6 +38,8 @@ CMakeLists.txt        # Build configuration
 4. **Garden Lamp Model** (center) - Working glTF model with proper vertex parsing
 5. **Procedural Terrain System** - Infinite world with 4 distinct biomes
 6. **Player Cube** - Movable character with terrain following and ray-cast movement
+7. **Resource Nodes** - Mineable copper (orange), iron (gray), and stone (brown) cubes
+8. **Roaming NPCs** - Autonomous AI entities: Wanderers (green), Villagers (blue), Merchants (orange)
 
 ## Unified Rendering Architecture
 
@@ -56,12 +58,28 @@ CMakeLists.txt        # Build configuration
 - **vs_textured_cube.bin + fs_textured_cube.bin** - Textured object shaders (used by both cubes and models)
 
 ## Controls
+
+### Movement & Camera
 - **WASD** - Camera movement
 - **SHIFT + WASD** - Sprint mode
 - **Q/E** - Vertical movement
 - **Left Mouse + Drag** - Camera rotation
 - **Right Mouse Click** - Move player to terrain location (ray casting)
-- **ESC** - Exit
+- **Double Right Click** - Sprint to terrain location
+- **1** - Jump to bird's eye view of player
+
+### Game Systems
+- **SPACE** - Mine nearby resource nodes (3.0 unit range)
+- **I** - Toggle inventory overlay
+- **O** - Toggle debug overlay (FPS, chunks, player position)
+
+### Health & Combat Testing
+- **H** - Test player damage (20 HP, 1-second immunity)
+- **J** - Test player healing (25 HP)
+- **K** - Test attack nearby NPCs (3.0 unit range, 25 damage)
+
+### System
+- **ESC** - Exit game
 
 ## Known Issues
 1. **Texture Coordinates**: Complex models may show incorrect textures due to default UV coordinates (0,0) instead of reading actual glTF texture coords
@@ -306,6 +324,199 @@ uint64_t getChunkKey(int chunkX, int chunkZ) const {
 
 **Applies to**: Any coordinate-based systems (entities, spatial indexing, save/load, grid systems)
 
+## Procedural Resource Generation System
+
+### Architecture Overview
+The game features a **deterministic resource generation system** integrated with chunk loading. Resources spawn when chunks are generated and persist in the world with proper biome-specific distribution.
+
+### Resource Types & Characteristics
+
+1. **Copper** (Orange `0xff4A90E2`)
+   - Primary biomes: Desert, Grassland
+   - Use: Basic crafting material
+   - Health: 100 HP, depletes with 25 damage per mining action
+
+2. **Iron** (Gray `0xff909090`)
+   - Primary biomes: Mountains, Swamp, Grassland
+   - Use: Advanced crafting material
+   - Health: 100 HP, depletes with 25 damage per mining action
+
+3. **Stone** (Brown `0xff808070`)
+   - Found in all biomes (lowest priority in most)
+   - Use: Building and tool material
+   - Health: 100 HP, depletes with 25 damage per mining action
+
+### Biome-Specific Resource Distribution
+
+```cpp
+// Biome resource densities and types
+MOUNTAINS:   High density (0.5f) - Iron + Stone priority
+GRASSLAND:   Balanced (0.35f) - All three resource types
+DESERT:      Medium (0.25f) - Copper + Stone priority  
+SWAMP:       Low (0.2f) - Iron + Stone only
+```
+
+### Key Classes
+
+#### ResourceNode
+```cpp
+struct ResourceNode {
+    bx::Vec3 position;
+    ResourceType type;          // COPPER, IRON, STONE
+    int health, maxHealth;      // Mining durability
+    float size;                 // Render scale
+    bool isActive;              // Depletion state
+    
+    int mine(int damage = 25);  // Returns 1 resource when depleted
+    const char* getResourceName() const;
+    uint32_t getColor() const;  // Biome-specific colors
+};
+```
+
+#### PlayerInventory
+```cpp
+struct PlayerInventory {
+    int copper, iron, stone;
+    bool showOverlay;
+    
+    void addResource(ResourceType type, int amount);
+    void toggleOverlay();       // I key toggle
+    void renderOverlay() const; // BGFX debug text UI
+};
+```
+
+### Resource Generation Algorithm
+
+**Deterministic Generation**: Uses chunk coordinates + attempt index as seed:
+```cpp
+float seed = (chunkX * prime1 + chunkZ * prime2 + attempts * prime3);
+float noiseValue = bx::sin(seed * freq1) * bx::cos(seed * freq2);
+
+if (noiseValue > (1.0f - density)) {
+    // Generate resource node at procedural offset within chunk
+    float offsetX = (bx::sin(seed * 0.6f) * 0.5f + 0.5f) * CHUNK_SIZE * SCALE;
+    float offsetZ = (bx::cos(seed * 0.7f) * 0.5f + 0.5f) * CHUNK_SIZE * SCALE;
+    // Place resource at terrain height
+}
+```
+
+### Mining System
+
+- **Range**: 3.0 unit radius from player position
+- **Input**: SPACE key to mine nearest resource in range
+- **Health**: Resources take multiple mining actions to deplete (4 hits at 25 damage each)
+- **Feedback**: Console output shows mining progress and resource collection
+- **Depletion**: Exhausted nodes disappear from world and stop rendering
+
+### Inventory System
+
+- **UI Overlay**: Toggle with I key, renders in top-left using BGFX debug text
+- **Color Coding**: Copper (yellow), Iron (gray), Stone (white) in overlay
+- **Real-time Updates**: Shows resource counts as player mines
+- **Persistence**: Inventory maintains state throughout gameplay session
+
+## Roaming NPCs System
+
+### Architecture Overview
+The game features **autonomous AI entities** that spawn procedurally in biomes and exhibit realistic behavioral patterns including idle states, pathfinding, and terrain-following movement.
+
+### NPC Types & Characteristics
+
+1. **Wanderers** (Green `0xff00AA00`)
+   - **Speed**: 2.0 units/second (fastest)
+   - **Behavior**: Active roaming with short idle periods (2-5 seconds)
+   - **Biomes**: Found in all biomes, common in Mountains/Swamps
+   - **Role**: Nomadic travelers, scouts
+
+2. **Villagers** (Blue `0xff0066FF`)
+   - **Speed**: 1.0 units/second (slowest)
+   - **Behavior**: Longer idle periods (4-8 seconds), deliberate movement
+   - **Biomes**: Primarily Grasslands (settlements)
+   - **Role**: Local inhabitants, farmers
+
+3. **Merchants** (Orange `0xffFFAA00`)
+   - **Speed**: 1.5 units/second (medium)
+   - **Behavior**: Balanced idle/movement timing (3-5 seconds)
+   - **Biomes**: Grasslands and Desert trade routes
+   - **Role**: Trade caravans, economic activity
+
+### AI Behavior System
+
+#### State Machine
+```cpp
+enum class NPCState {
+    IDLE,                    // Standing still, planning next move
+    MOVING_TO_TARGET,       // Pathfinding to destination
+    WANDERING              // Continuous random walk (unused currently)
+};
+```
+
+#### Behavior Patterns
+- **IDLE → MOVING_TO_TARGET**: Pick random destination 5-15 units away
+- **Movement**: Straight-line pathfinding with terrain following
+- **Target Selection**: Uses deterministic noise for varied but consistent movement
+- **Timeout Protection**: 15-second maximum movement time prevents getting stuck
+
+### Biome-Specific NPC Distribution
+
+```cpp
+// NPC spawn densities per biome
+GRASSLAND:   Highest (0.15f) - All three NPC types (villages)
+DESERT:      Medium (0.08f) - Wanderers + Merchants (trade routes)
+MOUNTAINS:   Low (0.05f) - Wanderers only (harsh environment)
+SWAMP:       Lowest (0.03f) - Wanderers only (dangerous terrain)
+```
+
+### Key Classes
+
+#### NPC
+```cpp
+struct NPC {
+    bx::Vec3 position, velocity, targetPosition;
+    NPCType type;               // WANDERER, VILLAGER, MERCHANT
+    NPCState state;             // Current AI state
+    float speed, size;          // Movement and render properties
+    float stateTimer, maxStateTime; // AI timing
+    bool isActive;              // Lifecycle management
+    uint32_t color;             // Type-specific rendering color
+    
+    void update(float deltaTime, float terrainHeight);
+    const char* getTypeName() const;
+};
+```
+
+### NPC Generation Algorithm
+
+**Biome-Specific Spawning**: Each biome has custom NPC generation logic:
+```cpp
+void generateNPCsForChunk(int chunkX, int chunkZ) {
+    BiomeType chunkBiome = getBiomeForChunk(chunkX, chunkZ);
+    // Different attempt counts and type distributions per biome
+    // Deterministic placement using chunk coordinates as seed
+    // Terrain height sampling for proper ground placement
+}
+```
+
+### AI Update System
+
+**Terrain Following**: NPCs automatically adjust Y position to terrain height:
+```cpp
+npc.update(deltaTime, chunkManager.getHeightAt(npc.position.x, npc.position.z));
+```
+
+**Movement Determinism**: Uses position-based seeds for consistent but varied behavior:
+```cpp
+float angle = (bx::sin(position.x * 0.7f + stateTimer) * 0.5f + 0.5f) * 2.0f * bx::kPi;
+float distance = 5.0f + (bx::cos(position.z * 0.8f + stateTimer) * 0.5f + 0.5f) * 10.0f;
+```
+
+### Dynamic Entity Management
+
+- **Chunk Integration**: NPCs spawn when chunks load, removed when chunks unload
+- **Memory Efficiency**: Only entities in loaded chunks consume memory
+- **Persistent Behavior**: Same world coordinates always generate same NPCs
+- **Performance**: ~1-3 NPCs per chunk maximum, depending on biome density
+
 ### Testing Changes
 ```bash
 make && ./MyFirstCppGame
@@ -338,6 +549,23 @@ make && ./MyFirstCppGame
 - Efficient vertex formats and unified rendering pipeline
 - Zero code duplication - fully refactored architecture
 
+## Recent Additions (2025)
+
+### ✅ Completed Features
+1. **Procedural Resource Generation System** - Biome-specific copper, iron, and stone nodes
+2. **Mining System** - Health-based resource depletion with SPACE key mining
+3. **Inventory System** - Visual overlay with I key toggle, real-time resource tracking
+4. **Roaming NPCs System** - Autonomous AI entities with biome-specific spawning
+5. **AI Behavior States** - Idle, pathfinding, and terrain-following movement
+6. **Resource Node Textures** - Proper vertex colors for copper (orange), iron (gray), stone (brown)
+7. **Console Output Cleanup** - Removed debug spam from inventory system
+
+### 🎯 Planned Next Features
+1. **Crafting System** - Convert resources into tools/items (hotkey: TAB)
+2. **Character Stats Screen** - Player progression tracking (hotkey: P)
+3. **Tool Durability** - Crafted mining tools with efficiency bonuses
+4. **NPC Interaction** - Trade with merchants, quests from villagers
+
 ## Future Improvements
 1. Fix glTF buffer parsing for complex models
 2. Add normal mapping support
@@ -347,3 +575,7 @@ make && ./MyFirstCppGame
 6. Add procedural settlement/structure generation in biomes
 7. Optimize chunk loading with background threading
 8. Add LOD (Level of Detail) system for distant chunks
+9. **NPC Dialogue System** - Text-based conversations with NPCs
+10. **Settlement Generation** - Procedural villages in Grassland biomes
+11. **Resource Respawning** - Depleted nodes regenerate over time
+12. **Improved AI Pathfinding** - Obstacle avoidance and smarter movement

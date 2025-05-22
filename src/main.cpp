@@ -625,30 +625,42 @@ struct NPC {
     float maxStateTime;
     bool isActive;
     uint32_t color;
+    uint32_t baseColor;      // Original color for health calculation
+    int health;
+    int maxHealth;
+    bool isHostile;
+    float lastDamageTime;
     
     NPC(float x, float y, float z, NPCType npcType) 
         : position({x, y, z}), velocity({0.0f, 0.0f, 0.0f}), targetPosition({x, y, z}),
           type(npcType), state(NPCState::IDLE), speed(1.5f), size(0.8f), 
-          stateTimer(0.0f), maxStateTime(3.0f), isActive(true) {
+          stateTimer(0.0f), maxStateTime(3.0f), isActive(true), isHostile(false), lastDamageTime(0.0f) {
         
         // Set NPC-specific properties
         switch (type) {
             case NPCType::WANDERER:
                 speed = 2.0f;
-                color = 0xff00AA00; // Green
+                baseColor = 0xff00AA00; // Green
+                maxHealth = 60;         // Medium health
                 maxStateTime = 2.0f + (bx::sin(x * 0.1f) * 0.5f + 0.5f) * 3.0f; // 2-5 seconds
                 break;
             case NPCType::VILLAGER:
                 speed = 1.0f;
-                color = 0xff0066FF; // Blue
+                baseColor = 0xff0066FF; // Blue  
+                maxHealth = 40;         // Low health (peaceful)
                 maxStateTime = 4.0f + (bx::cos(z * 0.1f) * 0.5f + 0.5f) * 4.0f; // 4-8 seconds
                 break;
             case NPCType::MERCHANT:
                 speed = 1.5f;
-                color = 0xffFFAA00; // Orange
+                baseColor = 0xffFFAA00; // Orange
+                maxHealth = 80;         // High health (well-armed traders)
                 maxStateTime = 3.0f + (bx::sin((x + z) * 0.1f) * 0.5f + 0.5f) * 2.0f; // 3-5 seconds
                 break;
         }
+        
+        health = maxHealth;  // Start at full health
+        color = baseColor;   // Start with base color
+        updateHealthColor(); // Apply initial color
     }
     
     void update(float deltaTime, float terrainHeight) {
@@ -728,6 +740,67 @@ struct NPC {
             case NPCType::MERCHANT: return "Merchant";
             default: return "Unknown";
         }
+    }
+    
+    void takeDamage(int damage, float currentTime) {
+        health = bx::max(0, health - damage);
+        lastDamageTime = currentTime;
+        updateHealthColor();
+        
+        // Make NPC hostile when attacked (except villagers who flee)
+        if (type != NPCType::VILLAGER) {
+            isHostile = true;
+        }
+        
+        std::cout << getTypeName() << " took " << damage << " damage! Health: " << health << "/" << maxHealth;
+        if (health <= 0) {
+            std::cout << " - " << getTypeName() << " defeated!";
+            isActive = false;
+        }
+        std::cout << std::endl;
+    }
+    
+    void updateHealthColor() {
+        if (health <= 0) {
+            color = 0xff404040; // Dark gray when dead
+            return;
+        }
+        
+        float healthPercent = (float)health / (float)maxHealth;
+        
+        if (isHostile) {
+            // Hostile NPCs get red tint
+            if (healthPercent > 0.7f) color = 0xffAA0000; // Dark red
+            else if (healthPercent > 0.3f) color = 0xff880000; // Darker red
+            else color = 0xff660000; // Very dark red
+        } else {
+            // Damaged but peaceful NPCs get darker versions of base color
+            if (healthPercent > 0.7f) {
+                color = baseColor; // Full color
+            } else if (healthPercent > 0.3f) {
+                // 50% darker
+                uint32_t r = ((baseColor >> 16) & 0xFF) / 2;
+                uint32_t g = ((baseColor >> 8) & 0xFF) / 2;
+                uint32_t b = (baseColor & 0xFF) / 2;
+                color = 0xff000000 | (r << 16) | (g << 8) | b;
+            } else {
+                // 75% darker (very dark)
+                uint32_t r = ((baseColor >> 16) & 0xFF) / 4;
+                uint32_t g = ((baseColor >> 8) & 0xFF) / 4;
+                uint32_t b = (baseColor & 0xFF) / 4;
+                color = 0xff000000 | (r << 16) | (g << 8) | b;
+            }
+        }
+    }
+    
+    bool canTakeDamage(float currentTime) const {
+        return (currentTime - lastDamageTime) > 0.5f; // 0.5 second damage immunity
+    }
+    
+    void heal(int amount) {
+        health = bx::min(maxHealth, health + amount);
+        updateHealthColor();
+        std::cout << getTypeName() << " healed " << amount << " HP! Health: " << health << "/" << maxHealth << std::endl;
     }
 };
 
@@ -1201,9 +1274,13 @@ struct Player {
     float moveSpeed;
     float sprintSpeed;
     float size;
+    int health;
+    int maxHealth;
+    float lastDamageTime;
     
     Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
-               hasTarget(false), isSprinting(false), moveSpeed(0.05f), sprintSpeed(0.15f), size(0.3f) {}
+               hasTarget(false), isSprinting(false), moveSpeed(0.05f), sprintSpeed(0.15f), size(0.3f),
+               health(100), maxHealth(100), lastDamageTime(0.0f) {}
     
     void setTarget(float x, float z, const ChunkManager& chunkManager, bool sprint = false) {
         targetPosition.x = x;
@@ -1237,6 +1314,52 @@ struct Player {
                 position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
             }
         }
+    }
+    
+    void takeDamage(int damage, float currentTime) {
+        if (canTakeDamage(currentTime)) {
+            health = bx::max(0, health - damage);
+            lastDamageTime = currentTime;
+            std::cout << "Player took " << damage << " damage! Health: " << health << "/" << maxHealth << std::endl;
+            
+            if (health <= 0) {
+                std::cout << "Player defeated! Respawning..." << std::endl;
+                respawn();
+            }
+        }
+    }
+    
+    bool canTakeDamage(float currentTime) const {
+        return (currentTime - lastDamageTime) > 1.0f; // 1 second damage immunity
+    }
+    
+    void heal(int amount) {
+        health = bx::min(maxHealth, health + amount);
+        std::cout << "Player healed " << amount << " HP! Health: " << health << "/" << maxHealth << std::endl;
+    }
+    
+    void respawn() {
+        health = maxHealth;
+        position = {0.0f, 0.0f, 0.0f}; // Reset to spawn point
+        hasTarget = false;
+        lastDamageTime = 0.0f;
+    }
+    
+    void renderHealthBar() const {
+        // Calculate health percentage for color coding
+        float healthPercent = (float)health / (float)maxHealth;
+        
+        // Choose color based on health percentage
+        uint32_t healthColor;
+        if (healthPercent > 0.7f) healthColor = 0x0a; // Green
+        else if (healthPercent > 0.3f) healthColor = 0x0e; // Yellow  
+        else healthColor = 0x0c; // Red
+        
+        // Position in top-middle of screen (assuming 80 character width)
+        int centerX = 35; // Approximate center for "Health: 100/100"
+        int topY = 1;     // Top row
+        
+        bgfx::dbgTextPrintf(centerX, topY, healthColor, "Health: %d/%d", health, maxHealth);
     }
 };
 
@@ -1856,6 +1979,9 @@ int main(int argc, char* argv[]) {
     std::cout << "SPACE - Mine nearby resource nodes" << std::endl;
     std::cout << "I    - Toggle inventory overlay" << std::endl;
     std::cout << "O    - Toggle debug overlay" << std::endl;
+    std::cout << "H    - Test damage (health system)" << std::endl;
+    std::cout << "J    - Test healing (health system)" << std::endl;
+    std::cout << "K    - Test attack nearby NPCs" << std::endl;
     std::cout << "ESC  - Exit" << std::endl;
     std::cout << "===================" << std::endl;
     
@@ -1963,6 +2089,39 @@ int main(int argc, char* argv[]) {
                     // Toggle inventory overlay
                     std::cout << "I key pressed - toggling inventory..." << std::endl;
                     inventory.toggleOverlay();
+                }
+                else if (event.key.key == SDLK_H) {
+                    // Test damage (H key for Health testing)
+                    player.takeDamage(20, time);
+                    std::cout << "H key pressed - test damage applied!" << std::endl;
+                }
+                else if (event.key.key == SDLK_J) {
+                    // Test healing (J key for heal)
+                    player.heal(25);
+                    std::cout << "J key pressed - test healing applied!" << std::endl;
+                }
+                else if (event.key.key == SDLK_K) {
+                    // Test NPC damage (K key for attacking nearby NPCs)
+                    const float attackRange = 3.0f;
+                    bool attackedSomeone = false;
+                    
+                    for (auto& npc : npcs) {
+                        if (!npc.isActive) continue;
+                        
+                        float dx = player.position.x - npc.position.x;
+                        float dz = player.position.z - npc.position.z;
+                        float distance = bx::sqrt(dx * dx + dz * dz);
+                        
+                        if (distance <= attackRange && npc.canTakeDamage(time)) {
+                            npc.takeDamage(25, time);
+                            attackedSomeone = true;
+                            break; // Attack only one NPC
+                        }
+                    }
+                    
+                    if (!attackedSomeone) {
+                        std::cout << "K key pressed - No NPCs in attack range (" << attackRange << " units)" << std::endl;
+                    }
                 }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
@@ -2233,6 +2392,9 @@ int main(int argc, char* argv[]) {
         
         // Render inventory overlay if enabled
         inventory.renderOverlay();
+        
+        // Render player health bar (always visible)
+        player.renderHealthBar();
         
         bgfx::frame();
     }
