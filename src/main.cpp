@@ -58,6 +58,43 @@ const float CAMERA_MOVE_SPEED = 0.1f;
 const float CAMERA_SPRINT_MULTIPLIER = 3.0f;
 const float CAMERA_ROTATE_SPEED = 0.005f;
 
+// Debug overlay system
+struct DebugOverlay {
+    bool enabled;
+    float fps;
+    float frameTime;
+    Uint64 lastTime;
+    Uint32 frameCount;
+    
+    DebugOverlay() : enabled(false), fps(0.0f), frameTime(0.0f), lastTime(0), frameCount(0) {}
+    
+    void update() {
+        frameCount++;
+        Uint64 currentTime = SDL_GetPerformanceCounter();
+        
+        if (lastTime == 0) {
+            lastTime = currentTime;
+            return;
+        }
+        
+        Uint64 frequency = SDL_GetPerformanceFrequency();
+        float deltaTime = (float)(currentTime - lastTime) / frequency;
+        
+        // Update FPS every 0.25 seconds
+        if (deltaTime >= 0.25f) {
+            fps = frameCount / deltaTime;
+            frameTime = deltaTime * 1000.0f / frameCount;
+            frameCount = 0;
+            lastTime = currentTime;
+        }
+    }
+    
+    void toggle() {
+        enabled = !enabled;
+        std::cout << "Debug overlay " << (enabled ? "enabled" : "disabled") << std::endl;
+    }
+};
+
 // Vertex structures for basic primitives
 struct PosColorVertex {
     float x, y, z;
@@ -160,7 +197,7 @@ enum class BiomeType {
     GRASSLAND    // Rolling hills, moderate variation
 };
 
-// Forward declaration for biome texture function
+// Forward declarations for biome texture functions
 bgfx::TextureHandle create_biome_texture(BiomeType biome);
 
 // Terrain system
@@ -854,7 +891,7 @@ bgfx::TextureHandle load_png_texture(const char* filePath) {
     return handle;
 }
 
-// Create biome-specific procedural texture
+// Legacy function for single biome textures (kept for compatibility)
 bgfx::TextureHandle create_biome_texture(BiomeType biome) {
     std::cout << "Creating " << (biome == BiomeType::DESERT ? "sand" : 
                                 biome == BiomeType::GRASSLAND ? "light green" :
@@ -1082,6 +1119,9 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "BGFX initialized successfully!" << std::endl;
 
+    // Enable debug text for overlay
+    bgfx::setDebug(BGFX_DEBUG_TEXT);
+
     // Set view clear state
     bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x443355FF, 1.0f, 0);
     bgfx::setViewRect(0, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -1223,6 +1263,9 @@ int main(int argc, char* argv[]) {
     Player player;
     player.position = {0.0f, 0.0f, 0.0f}; // Will be set properly after first chunk load
     
+    // Create debug overlay
+    DebugOverlay debugOverlay;
+    
     // Force initial chunk loading around player
     chunkManager.forceInitialChunkLoad(player.position.x, player.position.z);
     player.position.y = chunkManager.getHeightAt(0.0f, 0.0f) + player.size - 5.0f;
@@ -1235,6 +1278,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Left click and drag - Rotate camera" << std::endl;
     std::cout << "Right click - Move player to terrain location" << std::endl;
     std::cout << "Double right click - Sprint to terrain location" << std::endl;
+    std::cout << "O    - Toggle debug overlay" << std::endl;
     std::cout << "ESC  - Exit" << std::endl;
     std::cout << "===================" << std::endl;
     
@@ -1307,6 +1351,10 @@ int main(int argc, char* argv[]) {
                     cameraYaw = bx::atan2(dirX, dirZ);
                     
                     std::cout << "Camera jumped to bird's eye view of player (pitch: " << cameraPitch << ", yaw: " << cameraYaw << ")" << std::endl;
+                }
+                else if (event.key.key == SDLK_O) {
+                    // Toggle debug overlay
+                    debugOverlay.toggle();
                 }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
@@ -1449,6 +1497,9 @@ int main(int argc, char* argv[]) {
             shouldSprint = false; // Reset sprint flag
         }
         
+        // Update debug overlay
+        debugOverlay.update();
+        
         // Update player and chunks
         player.update(chunkManager);
         chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
@@ -1498,6 +1549,31 @@ int main(int argc, char* argv[]) {
             bx::mtxMul(modelMatrix, temp, translation);
             
             gardenLampModel.render(texProgram, s_texColor, modelMatrix);
+        }
+        
+        // Render debug overlay if enabled
+        if (debugOverlay.enabled) {
+            // Clear debug text buffer
+            bgfx::dbgTextClear();
+            
+            // Get current window size for positioning
+            int currentWidth, currentHeight;
+            SDL_GetWindowSize(window, &currentWidth, &currentHeight);
+            
+            // Calculate text grid size (BGFX debug text uses character grid)
+            int textCols = currentWidth / 8;  // Approximate character width
+            int textRows = currentHeight / 16; // Approximate character height
+            
+            // Position FPS counter in top right corner
+            int fpsX = textCols - 18; // Leave more space for "FPS: 999 (99.9ms)"
+            if (fpsX < 0) fpsX = 0;
+            
+            // Render FPS counter with top padding
+            bgfx::dbgTextPrintf(fpsX, 1, 0x0f, "FPS: %3d (%4.1fms)", (int)debugOverlay.fps, debugOverlay.frameTime);
+            
+            // Optional: Add more debug info below FPS
+            bgfx::dbgTextPrintf(fpsX, 2, 0x0f, "Chunks: %d", (int)chunkManager.getLoadedChunkInfo().size());
+            bgfx::dbgTextPrintf(fpsX, 3, 0x0f, "Player: %.1f,%.1f", player.position.x, player.position.z);
         }
         
         bgfx::frame();
