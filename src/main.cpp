@@ -369,60 +369,88 @@ struct Ray {
 
 Ray createRayFromMouse(float mouseX, float mouseY, int screenWidth, int screenHeight, 
                        const float* viewMatrix, const float* projMatrix) {
-    // Convert mouse coordinates to normalized device coordinates
-    float x = (2.0f * mouseX) / screenWidth - 1.0f;
-    float y = 1.0f - (2.0f * mouseY) / screenHeight;
+    // Convert mouse coordinates to NDC using BGFX method
+    float mouseXNDC = (mouseX / (float)screenWidth) * 2.0f - 1.0f;
+    float mouseYNDC = ((screenHeight - mouseY) / (float)screenHeight) * 2.0f - 1.0f;
     
-    // Create ray in clip space
-    bx::Vec3 rayClip = {x, y, -1.0f};
+    // Create view-projection matrix and its inverse
+    float viewProj[16];
+    bx::mtxMul(viewProj, viewMatrix, projMatrix);
+    float invViewProj[16];
+    bx::mtxInverse(invViewProj, viewProj);
     
-    // Convert to eye space
-    float invProj[16];
-    bx::mtxInverse(invProj, projMatrix);
+    // Unproject NDC coordinates to world space using BGFX method
+    const bx::Vec3 pickEye = bx::mulH({mouseXNDC, mouseYNDC, 0.0f}, invViewProj);
+    const bx::Vec3 pickAt = bx::mulH({mouseXNDC, mouseYNDC, 1.0f}, invViewProj);
     
-    bx::Vec3 rayEye = {x, y, -1.0f};
-    rayEye = bx::mul(rayEye, invProj);
-    rayEye.z = -1.0f;
+    // Calculate ray direction
+    bx::Vec3 rayDirection = {
+        pickAt.x - pickEye.x,
+        pickAt.y - pickEye.y,
+        pickAt.z - pickEye.z
+    };
+    rayDirection = bx::normalize(rayDirection);
     
-    // Convert to world space
-    float invView[16];
-    bx::mtxInverse(invView, viewMatrix);
+    std::cout << "Mouse: (" << mouseX << ", " << mouseY << ") -> NDC: (" << mouseXNDC << ", " << mouseYNDC << ")" << std::endl;
+    std::cout << "Ray origin: (" << pickEye.x << ", " << pickEye.y << ", " << pickEye.z << ")" << std::endl;
+    std::cout << "Ray direction: (" << rayDirection.x << ", " << rayDirection.y << ", " << rayDirection.z << ")" << std::endl;
     
-    bx::Vec3 cameraPos = {0.0f, 0.0f, 0.0f};
-    bx::Vec3 origin = bx::mul(cameraPos, invView);
-    bx::Vec3 direction = bx::mul(rayEye, invView);
-    direction = bx::normalize(direction);
-    
-    Ray ray = {{origin.x, origin.y, origin.z}, {direction.x, direction.y, direction.z}};
+    Ray ray = {
+        {pickEye.x, pickEye.y, pickEye.z}, 
+        {rayDirection.x, rayDirection.y, rayDirection.z}
+    };
     
     return ray;
 }
 
 bool rayTerrainIntersection(const Ray& ray, const Terrain& terrain, bx::Vec3& hitPoint) {
-    // Simple ray-terrain intersection using step marching
     float t = 0.0f;
-    float maxDistance = 100.0f;
+    float maxDistance = 200.0f;
     float stepSize = 0.1f;
     
+    // Account for terrain offset in rendering (-5.0f in Y)
+    const float TERRAIN_Y_OFFSET = -5.0f;
+    
+    std::cout << "  Ray intersection - Origin: (" << ray.origin.x << ", " << ray.origin.y << ", " << ray.origin.z << ")" << std::endl;
+    std::cout << "  Ray direction: (" << ray.direction.x << ", " << ray.direction.y << ", " << ray.direction.z << ")" << std::endl;
+    
+    int intersectionChecks = 0;
+    
     while (t < maxDistance) {
-        bx::Vec3 point = {
+        bx::Vec3 currentPoint = {
             ray.origin.x + ray.direction.x * t,
             ray.origin.y + ray.direction.y * t,
             ray.origin.z + ray.direction.z * t
         };
         
-        float terrainHeight = terrain.getHeightAt(point.x, point.z);
+        float rawTerrainHeight = terrain.getHeightAt(currentPoint.x, currentPoint.z);
+        float actualTerrainHeight = rawTerrainHeight + TERRAIN_Y_OFFSET;
         
-        if (point.y <= terrainHeight) {
-            hitPoint.x = point.x;
-            hitPoint.y = terrainHeight;
-            hitPoint.z = point.z;
+        // Check if we're close to or below terrain (accounting for offset)
+        if (currentPoint.y <= actualTerrainHeight + 0.1f) {
+            hitPoint.x = currentPoint.x;
+            hitPoint.z = currentPoint.z;
+            hitPoint.y = actualTerrainHeight;
+            
+            std::cout << "  Intersection found at t=" << t << ", point=(" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
             return true;
         }
         
+        intersectionChecks++;
         t += stepSize;
+        
+        // Debug first few checks
+        if (intersectionChecks <= 3) {
+            std::cout << "  Check " << intersectionChecks << ": t=" << t << ", point=(" << currentPoint.x << ", " << currentPoint.y << ", " << currentPoint.z << "), raw_height=" << rawTerrainHeight << ", actual_height=" << actualTerrainHeight << std::endl;
+        }
+        
+        // Early exit if we've gone too far below terrain
+        if (intersectionChecks > 50 && currentPoint.y < actualTerrainHeight - 10.0f) {
+            break;
+        }
     }
     
+    std::cout << "  No intersection found after " << intersectionChecks << " checks" << std::endl;
     return false;
 }
 
@@ -947,11 +975,17 @@ int main(int argc, char* argv[]) {
         
         // Handle terrain picking from right-click
         if (hasPendingClick) {
-            Ray ray = createRayFromMouse(pendingMouseX, pendingMouseY, WINDOW_WIDTH, WINDOW_HEIGHT, view, proj);
+            int currentWidth, currentHeight;
+            SDL_GetWindowSize(window, &currentWidth, &currentHeight);
+            
+            std::cout << "Right-click detected! Window size: " << currentWidth << "x" << currentHeight << std::endl;
+            Ray ray = createRayFromMouse(pendingMouseX, pendingMouseY, currentWidth, currentHeight, view, proj);
             bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
             if (rayTerrainIntersection(ray, terrain, hitPoint)) {
                 player.setTarget(hitPoint.x, hitPoint.z, terrain);
                 std::cout << "Player moving to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+            } else {
+                std::cout << "No terrain intersection found!" << std::endl;
             }
             hasPendingClick = false;
         }

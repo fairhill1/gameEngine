@@ -35,6 +35,8 @@ CMakeLists.txt        # Build configuration
 2. **Procedural Textured Cube** (right) - Generated sandy texture
 3. **PNG Textured Cube** (top) - Loaded high-res texture
 4. **Garden Lamp Model** (center) - Working glTF model with proper vertex parsing
+5. **Smooth Terrain** (ground) - Multi-octave noise with bilinear interpolation
+6. **Player Cube** - Movable character that follows terrain height
 
 ## Unified Rendering Architecture
 
@@ -56,7 +58,8 @@ CMakeLists.txt        # Build configuration
 - **WASD** - Camera movement
 - **SHIFT + WASD** - Sprint mode
 - **Q/E** - Vertical movement
-- **Mouse drag** - Camera rotation
+- **Left Mouse + Drag** - Camera rotation
+- **Right Mouse Click** - Move player to terrain location (ray casting)
 - **ESC** - Exit
 
 ## Known Issues
@@ -64,6 +67,49 @@ CMakeLists.txt        # Build configuration
 2. **Texture Debugging**: Verbose debug output in model.cpp (can be disabled)
 
 ## Development Notes
+
+### BGFX Mouse Ray Casting for Terrain Picking
+**CRITICAL**: The correct method for converting mouse coordinates to world space rays in BGFX:
+
+```cpp
+Ray createRayFromMouse(float mouseX, float mouseY, int screenWidth, int screenHeight, 
+                       const float* viewMatrix, const float* projMatrix) {
+    // 1. Convert mouse coordinates to NDC using BGFX method
+    float mouseXNDC = (mouseX / (float)screenWidth) * 2.0f - 1.0f;
+    float mouseYNDC = ((screenHeight - mouseY) / (float)screenHeight) * 2.0f - 1.0f;
+    
+    // 2. Create view-projection matrix and its inverse
+    float viewProj[16];
+    bx::mtxMul(viewProj, viewMatrix, projMatrix);
+    float invViewProj[16];
+    bx::mtxInverse(invViewProj, viewProj);
+    
+    // 3. Unproject NDC coordinates to world space using BGFX method
+    const bx::Vec3 pickEye = bx::mulH({mouseXNDC, mouseYNDC, 0.0f}, invViewProj);
+    const bx::Vec3 pickAt = bx::mulH({mouseXNDC, mouseYNDC, 1.0f}, invViewProj);
+    
+    // 4. Calculate ray direction
+    bx::Vec3 rayDirection = bx::normalize({
+        pickAt.x - pickEye.x,
+        pickAt.y - pickEye.y,
+        pickAt.z - pickEye.z
+    });
+    
+    return {{pickEye.x, pickEye.y, pickEye.z}, {rayDirection.x, rayDirection.y, rayDirection.z}};
+}
+```
+
+**Key Points**:
+- Use **Y-flip** in NDC conversion: `((screenHeight - mouseY) / screenHeight)` 
+- Use **bx::mulH()** for homogeneous coordinate multiplication (handles perspective divide)
+- Use **inverse view-projection matrix** to unproject from screen to world space
+- **Source**: Official BGFX picking example (`examples/30-picking/picking.cpp`)
+
+**Common Mistakes to Avoid**:
+- Don't manually calculate ray direction from camera - use unprojection method
+- Don't forget Y-flip for screen coordinates 
+- Don't use regular matrix multiplication - use `bx::mulH()` for proper perspective divide
+- Account for terrain Y-offset when doing intersection tests
 
 ### Critical glTF Parsing Lessons Learned
 **IMPORTANT**: When debugging model loading issues:
