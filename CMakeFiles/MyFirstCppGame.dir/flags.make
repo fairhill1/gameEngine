@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = -DBX_CONFIG_DEBUG=0
 
-CXX_INCLUDES = -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bx/include -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bimg/include -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bgfx/include -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bx/include/compat/osx -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/stb -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/tinygltf -I/Users/adne/Desktop/dev/myfirstcplusplusgame/sdl_src/SDL-release-3.2.14/build/include-revision -I/Users/adne/Desktop/dev/myfirstcplusplusgame/sdl_src/SDL-release-3.2.14/include
+CXX_INCLUDES = -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bx/include -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bimg/include -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bgfx/include -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bx/include/compat/osx -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/stb -I/Users/adne/Desktop/dev/myfirstcplusplusgame/deps/tinygltf -I/Users/adne/Desktop/dev/myfirstcplusplusgame/src -I/Users/adne/Desktop/dev/myfirstcplusplusgame/sdl_src/SDL-release-3.2.14/build/include-revision -I/Users/adne/Desktop/dev/myfirstcplusplusgame/sdl_src/SDL-release-3.2.14/include
 
 CXX_FLAGSarm64 = -std=gnu++17 -arch arm64
 

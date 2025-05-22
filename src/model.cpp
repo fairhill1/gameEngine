@@ -9,7 +9,7 @@
 // Include stb_image without redefining the implementation
 #include "stb_image.h"
 
-// Include TinyGLTF without implementation (it's already defined in main.cpp)
+// Include TinyGLTF header without implementation
 #include "tiny_gltf.h"
 
 // Initialize static vertex layout

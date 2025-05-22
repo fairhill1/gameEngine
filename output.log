@@ -1,0 +1,67 @@
+Creating window...
+Window created successfully!
+Got native window handle: 0x146e2f930
+Initializing BGFX...
+BGFX init parameters:
+- Renderer type: 5
+- Window handle: 0x146e2f930
+- Display handle: 0x0
+- Resolution: 800x600
+BGFX initialized successfully!
+Preparing 3D rendering...
+Creating procedural texture...
+Created procedural sand texture
+Loading PNG texture for the third cube...
+Loaded texture: assets/sandy_gravel_02_diff_1k.png (1024x1024, 3 channels)
+PNG texture loaded successfully!
+Texture created successfully!
+Loading Spartan GLB model...
+Loading model from: assets/spartan_halo.glb
+Processing mesh: Floor_lambert2_0
+Vertex count: 4
+Index count: 6
+Processing mesh: polySurface436_Spartan_Ear_Mat_0
+Vertex count: 391
+Index count: 1824
+Processing mesh: Helmet_Spartan_Helmet_Mat_0
+Vertex count: 3020
+Index count: 14172
+Processing mesh: Helmet_Spartan_Ear_Mat_0
+Vertex count: 391
+Index count: 1824
+Processing mesh: Armour_Spartan_Chest_Mat_0
+Vertex count: 5812
+Index count: 24900
+Processing mesh: Armour_Spartan_Arms_Mat_0
+Vertex count: 3602
+Index count: 17304
+Processing mesh: Armour_Spartan_Legs_Mat_0
+Vertex count: 4800
+Index count: 21642
+Processing mesh: Armour_Spartan_Shoulders_Mat_0
+Vertex count: 3744
+Index count: 11016
+Processing mesh: Armour_lambert1_0
+Vertex count: 1496
+Index count: 3978
+Processing mesh: Armour_LP_Spartan_Undersuit_Mat_0
+Vertex count: 5754
+Index count: 31140
+Loaded 10 meshes from model
+Spartan model loaded successfully!
+Loading shaders...
+Looking for shaders at:
+  Colored cube vertex: shaders/metal/vs_cube.bin
+  Colored cube fragment: shaders/metal/fs_cube.bin
+  Textured cube vertex: shaders/metal/vs_textured_cube.bin
+  Textured cube fragment: shaders/metal/fs_textured_cube.bin
+Creating shaders...
+Creating shader programs...
+Starting main loop...
+===== Controls =====
+WASD - Move camera
+SHIFT - Sprint (faster movement)
+Q/E  - Move up/down
+Click and drag mouse - Rotate camera
+ESC  - Exit
+===================

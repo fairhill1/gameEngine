@@ -8,6 +8,13 @@
 // Forward declarations
 namespace tinygltf {
     class Model;
+    class Image;
+    class Material;
+    class Primitive;
+    class Accessor;
+    class BufferView;
+    class Buffer;
+    class TinyGLTF;
 }
 
 // Simple vertex structure for models

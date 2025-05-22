@@ -30,6 +30,7 @@ message(STATUS "SDL3_LIBRARIES: ${SDL3_LIBRARIES}")
 # Source files
 set(SOURCES 
     src/main.cpp
+    src/model.cpp
 )
 
 # Create executable
@@ -44,6 +45,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${BGFX_DIR}/bx/include/compat/osx
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/tinygltf
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # Link libraries
