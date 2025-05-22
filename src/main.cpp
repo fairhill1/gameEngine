@@ -1093,7 +1093,6 @@ int main(int argc, char* argv[]) {
     // Load initial chunks around player
     chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
     player.position.y = chunkManager.getHeightAt(0.0f, 0.0f) + player.size - 5.0f;
-    
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
     std::cout << "WASD - Move camera" << std::endl;
@@ -1111,10 +1110,19 @@ int main(int argc, char* argv[]) {
     SDL_Event event;
     float time = 0.0f;
     
-    // Camera variables
-    bx::Vec3 cameraPos = {0.0f, 8.0f, -10.0f};
-    float cameraYaw = 0.0f;
-    float cameraPitch = -0.3f;
+    // Camera variables - set to bird's eye view of player
+    bx::Vec3 cameraPos = {player.position.x, player.position.y + 15.0f, player.position.z + 8.0f};
+    
+    // Calculate initial camera orientation to look at player
+    float dirX = player.position.x - cameraPos.x;
+    float dirY = player.position.y - cameraPos.y;
+    float dirZ = player.position.z - cameraPos.z;
+    float horizontalDist = bx::sqrt(dirX * dirX + dirZ * dirZ);
+    
+    float cameraYaw = bx::atan2(dirX, dirZ);
+    float cameraPitch = bx::atan2(-dirY, horizontalDist);
+    
+    std::cout << "Initial camera set to bird's eye view of player" << std::endl;
     
     // Mouse variables for camera rotation
     float prevMouseX = 0.0f;
