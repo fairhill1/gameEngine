@@ -118,6 +118,18 @@ static PosColorVertex cubeVertices[] = {
     { 1.0f, -1.0f, -1.0f, 0xffffff00}  // 7: Back-bottom-right (yellow)
 };
 
+// Copper-colored cube vertices (orange-brown copper color)
+static PosColorVertex copperCubeVertices[] = {
+    {-1.0f,  1.0f,  1.0f, 0xff2D72B8}, // 0: Front-top-left (copper orange)
+    { 1.0f,  1.0f,  1.0f, 0xff2D72B8}, // 1: Front-top-right (copper orange)
+    {-1.0f, -1.0f,  1.0f, 0xff1F5A9A}, // 2: Front-bottom-left (darker copper)
+    { 1.0f, -1.0f,  1.0f, 0xff1F5A9A}, // 3: Front-bottom-right (darker copper)
+    {-1.0f,  1.0f, -1.0f, 0xff3D82C8}, // 4: Back-top-left (lighter copper)
+    { 1.0f,  1.0f, -1.0f, 0xff3D82C8}, // 5: Back-top-right (lighter copper)
+    {-1.0f, -1.0f, -1.0f, 0xff1F5A9A}, // 6: Back-bottom-left (darker copper)
+    { 1.0f, -1.0f, -1.0f, 0xff1F5A9A}  // 7: Back-bottom-right (darker copper)
+};
+
 // Textured cube vertices
 static PosTexVertex texCubeVertices[] = {
     // Front face
@@ -743,6 +755,119 @@ struct Player {
     }
 };
 
+// Resource node system
+enum class ResourceType {
+    COPPER,
+    IRON,
+    STONE
+};
+
+struct ResourceNode {
+    bx::Vec3 position;
+    ResourceType type;
+    int health;
+    int maxHealth;
+    float size;
+    bool isActive;
+    
+    ResourceNode(float x, float y, float z, ResourceType resourceType, int hp = 100) 
+        : position({x, y, z}), type(resourceType), health(hp), maxHealth(hp), size(0.5f), isActive(true) {}
+    
+    bool canMine() const {
+        return isActive && health > 0;
+    }
+    
+    int mine(int damage = 25) {
+        if (!canMine()) return 0;
+        
+        health -= damage;
+        std::cout << "Mining " << getResourceName() << " - Health: " << health << "/" << maxHealth << std::endl;
+        
+        if (health <= 0) {
+            health = 0;
+            isActive = false;
+            std::cout << getResourceName() << " node depleted! Gained 1 " << getResourceName() << std::endl;
+            return 1; // Return resource gained
+        }
+        return 0;
+    }
+    
+    const char* getResourceName() const {
+        switch (type) {
+            case ResourceType::COPPER: return "Copper";
+            case ResourceType::IRON: return "Iron";
+            case ResourceType::STONE: return "Stone";
+            default: return "Unknown";
+        }
+    }
+    
+    uint32_t getColor() const {
+        switch (type) {
+            case ResourceType::COPPER: return 0xff4A90E2; // Orange-brown for copper
+            case ResourceType::IRON: return 0xff808080;   // Gray for iron
+            case ResourceType::STONE: return 0xff606060;  // Dark gray for stone
+            default: return 0xffffffff;
+        }
+    }
+};
+
+// Player inventory system
+struct PlayerInventory {
+    int copper = 0;
+    int iron = 0;
+    int stone = 0;
+    bool showOverlay = false;
+    
+    void addResource(ResourceType type, int amount) {
+        switch (type) {
+            case ResourceType::COPPER: copper += amount; break;
+            case ResourceType::IRON: iron += amount; break;
+            case ResourceType::STONE: stone += amount; break;
+        }
+        printInventory();
+    }
+    
+    void printInventory() const {
+        std::cout << "=== INVENTORY ===" << std::endl;
+        std::cout << "Copper: " << copper << std::endl;
+        std::cout << "Iron: " << iron << std::endl;
+        std::cout << "Stone: " << stone << std::endl;
+        std::cout << "=================" << std::endl;
+    }
+    
+    void toggleOverlay() {
+        std::cout << "Before toggle: showOverlay = " << showOverlay << std::endl;
+        showOverlay = !showOverlay;
+        std::cout << "After toggle: showOverlay = " << showOverlay << std::endl;
+        std::cout << "Inventory overlay " << (showOverlay ? "enabled" : "disabled") << std::endl;
+    }
+    
+    void renderOverlay() const {
+        if (!showOverlay) {
+            std::cout << "renderOverlay called but showOverlay = false, not rendering" << std::endl;
+            return;
+        }
+        
+        std::cout << "renderOverlay: Actually rendering inventory (showOverlay = true)" << std::endl;
+        
+        // Position inventory in top left corner
+        int x = 1; // 1 character from left edge
+        int y = 1; // 1 character from top edge
+        
+        // Render inventory header
+        bgfx::dbgTextPrintf(x, y, 0x0f, "=== INVENTORY ===");
+        
+        // Render resource counts with color coding
+        bgfx::dbgTextPrintf(x, y + 1, 0x06, "Copper: %d", copper);  // Orange/brown color
+        bgfx::dbgTextPrintf(x, y + 2, 0x08, "Iron:   %d", iron);    // Gray color
+        bgfx::dbgTextPrintf(x, y + 3, 0x07, "Stone:  %d", stone);   // Light gray color
+        
+        // Render footer
+        bgfx::dbgTextPrintf(x, y + 4, 0x0f, "=================");
+        bgfx::dbgTextPrintf(x, y + 5, 0x0a, "Press I to close");    // Green color for instruction
+    }
+};
+
 // Ray casting for mouse picking
 struct Ray {
     bx::Vec3 origin;
@@ -1143,6 +1268,9 @@ int main(int argc, char* argv[]) {
     bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(
         bgfx::makeRef(cubeVertices, sizeof(cubeVertices)), layout);
     
+    bgfx::VertexBufferHandle copperVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(copperCubeVertices, sizeof(copperCubeVertices)), layout);
+    
     bgfx::VertexBufferHandle texVbh = bgfx::createVertexBuffer(
         bgfx::makeRef(texCubeVertices, sizeof(texCubeVertices)), texLayout);
 
@@ -1263,12 +1391,27 @@ int main(int argc, char* argv[]) {
     Player player;
     player.position = {0.0f, 0.0f, 0.0f}; // Will be set properly after first chunk load
     
+    // Create player inventory
+    PlayerInventory inventory;
+    
     // Create debug overlay
     DebugOverlay debugOverlay;
+    
+    // Create resource nodes for testing
+    std::vector<ResourceNode> resourceNodes;
+    // Add copper node near spawn for testing
+    resourceNodes.emplace_back(3.0f, 0.0f, 3.0f, ResourceType::COPPER, 100);
     
     // Force initial chunk loading around player
     chunkManager.forceInitialChunkLoad(player.position.x, player.position.z);
     player.position.y = chunkManager.getHeightAt(0.0f, 0.0f) + player.size - 5.0f;
+    
+    // Position resource nodes on terrain
+    for (auto& node : resourceNodes) {
+        node.position.y = chunkManager.getHeightAt(node.position.x, node.position.z) + node.size - 5.0f;
+        std::cout << "Placed " << node.getResourceName() << " node at (" 
+                  << node.position.x << ", " << node.position.y << ", " << node.position.z << ")" << std::endl;
+    }
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
     std::cout << "WASD - Move camera" << std::endl;
@@ -1278,6 +1421,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Left click and drag - Rotate camera" << std::endl;
     std::cout << "Right click - Move player to terrain location" << std::endl;
     std::cout << "Double right click - Sprint to terrain location" << std::endl;
+    std::cout << "SPACE - Mine nearby resource nodes" << std::endl;
+    std::cout << "I    - Toggle inventory overlay" << std::endl;
     std::cout << "O    - Toggle debug overlay" << std::endl;
     std::cout << "ESC  - Exit" << std::endl;
     std::cout << "===================" << std::endl;
@@ -1355,6 +1500,37 @@ int main(int argc, char* argv[]) {
                 else if (event.key.key == SDLK_O) {
                     // Toggle debug overlay
                     debugOverlay.toggle();
+                }
+                else if (event.key.key == SDLK_SPACE) {
+                    // Mine nearby resource nodes
+                    const float miningRange = 2.0f;
+                    bool minedSomething = false;
+                    
+                    for (auto& node : resourceNodes) {
+                        if (!node.canMine()) continue;
+                        
+                        float dx = player.position.x - node.position.x;
+                        float dz = player.position.z - node.position.z;
+                        float distance = bx::sqrt(dx * dx + dz * dz);
+                        
+                        if (distance <= miningRange) {
+                            int resourceGained = node.mine();
+                            if (resourceGained > 0) {
+                                inventory.addResource(node.type, resourceGained);
+                            }
+                            minedSomething = true;
+                            break; // Mine one node at a time
+                        }
+                    }
+                    
+                    if (!minedSomething) {
+                        std::cout << "No resource nodes in range (need to be within " << miningRange << " units)" << std::endl;
+                    }
+                }
+                else if (event.key.key == SDLK_I) {
+                    // Toggle inventory overlay
+                    std::cout << "I key pressed - toggling inventory..." << std::endl;
+                    inventory.toggleOverlay();
                 }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
@@ -1514,6 +1690,23 @@ int main(int argc, char* argv[]) {
         bx::mtxMul(playerMatrix, playerScale, playerTranslation);
         render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, playerMatrix);
         
+        // Render resource nodes
+        for (const auto& node : resourceNodes) {
+            if (!node.isActive) continue; // Don't render depleted nodes
+            
+            float nodeMatrix[16], nodeTranslation[16], nodeScale[16];
+            bx::mtxScale(nodeScale, node.size, node.size, node.size);
+            bx::mtxTranslate(nodeTranslation, node.position.x, node.position.y, node.position.z);
+            bx::mtxMul(nodeMatrix, nodeScale, nodeTranslation);
+            
+            // Use copper-colored vertex buffer for copper nodes, regular for others
+            if (node.type == ResourceType::COPPER) {
+                render_object_at_position(copperVbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nodeMatrix);
+            } else {
+                render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, nodeMatrix);
+            }
+        }
+        
         // Render colored cube (left side)
         float coloredMtx[16], translation[16], rotation[16];
         bx::mtxTranslate(translation, -2.5f, 0.0f, 0.0f);
@@ -1551,19 +1744,19 @@ int main(int argc, char* argv[]) {
             gardenLampModel.render(texProgram, s_texColor, modelMatrix);
         }
         
+        // Always clear debug text buffer and render active overlays
+        bgfx::dbgTextClear();
+        
+        // Get current window size for positioning
+        int currentWidth, currentHeight;
+        SDL_GetWindowSize(window, &currentWidth, &currentHeight);
+        
+        // Calculate text grid size (BGFX debug text uses character grid)
+        int textCols = currentWidth / 8;  // Approximate character width
+        int textRows = currentHeight / 16; // Approximate character height
+        
         // Render debug overlay if enabled
         if (debugOverlay.enabled) {
-            // Clear debug text buffer
-            bgfx::dbgTextClear();
-            
-            // Get current window size for positioning
-            int currentWidth, currentHeight;
-            SDL_GetWindowSize(window, &currentWidth, &currentHeight);
-            
-            // Calculate text grid size (BGFX debug text uses character grid)
-            int textCols = currentWidth / 8;  // Approximate character width
-            int textRows = currentHeight / 16; // Approximate character height
-            
             // Position FPS counter in top right corner
             int fpsX = textCols - 18; // Leave more space for "FPS: 999 (99.9ms)"
             if (fpsX < 0) fpsX = 0;
@@ -1576,6 +1769,9 @@ int main(int argc, char* argv[]) {
             bgfx::dbgTextPrintf(fpsX, 3, 0x0f, "Player: %.1f,%.1f", player.position.x, player.position.z);
         }
         
+        // Render inventory overlay if enabled
+        inventory.renderOverlay();
+        
         bgfx::frame();
     }
     
@@ -1585,6 +1781,7 @@ int main(int argc, char* argv[]) {
     bgfx::destroy(s_texColor);
     bgfx::destroy(ibh);
     bgfx::destroy(vbh);
+    bgfx::destroy(copperVbh);
     bgfx::destroy(texIbh);
     bgfx::destroy(texVbh);
     bgfx::destroy(program);
