@@ -1419,7 +1419,8 @@ private:
 // Skill types
 enum class SkillType {
     ATHLETICS,
-    UNARMED
+    UNARMED,
+    MINING
 };
 
 // Skill structure
@@ -1464,6 +1465,7 @@ struct PlayerSkills {
         // Initialize skills
         skills.emplace(SkillType::ATHLETICS, Skill("Athletics", 1));
         skills.emplace(SkillType::UNARMED, Skill("Unarmed", 1));
+        skills.emplace(SkillType::MINING, Skill("Mining", 1));
     }
     
     void toggleOverlay() {
@@ -1478,22 +1480,22 @@ struct PlayerSkills {
         int x = 1;
         int y = 25; // Bottom left, safe for 600px window (about 37 rows total)
         
-        // Render skills header
-        bgfx::dbgTextPrintf(x, y, 0x0f, "=== SKILLS ===");
+        // Render skills header with black background
+        bgfx::dbgTextPrintf(x, y, 0x0f, "=== SKILLS ===");  // white text on black background
         
         // Render each skill
         int lineOffset = 1;
         for (const auto& [type, skill] : skills) {
             int xpPercent = (int)((skill.experience / skill.experienceToNextLevel) * 100.0f);
-            bgfx::dbgTextPrintf(x, y + lineOffset, 0x0b, "%s Lv.%d", skill.name.c_str(), skill.level);
+            bgfx::dbgTextPrintf(x, y + lineOffset, 0x0b, "%s Lv.%d", skill.name.c_str(), skill.level);  // cyan on black
             bgfx::dbgTextPrintf(x, y + lineOffset + 1, 0x03, "  XP: %d/%d (%d%%)", 
-                               (int)skill.experience, (int)skill.experienceToNextLevel, xpPercent);
+                               (int)skill.experience, (int)skill.experienceToNextLevel, xpPercent);  // cyan on black
             lineOffset += 2;
         }
         
         // Render footer
-        bgfx::dbgTextPrintf(x, y + lineOffset, 0x0f, "===============");
-        bgfx::dbgTextPrintf(x, y + lineOffset + 1, 0x0a, "Press C to close");
+        bgfx::dbgTextPrintf(x, y + lineOffset, 0x0f, "===============");  // white on black
+        bgfx::dbgTextPrintf(x, y + lineOffset + 1, 0x0a, "Press C to close");  // green on black
     }
     
     Skill& getSkill(SkillType type) {
@@ -2688,9 +2690,18 @@ int main(int argc, char* argv[]) {
                         float distance = bx::sqrt(dx * dx + dz * dz);
                         
                         if (distance <= miningRange) {
-                            int resourceGained = node.mine();
+                            // Apply Mining skill modifier to damage
+                            float miningModifier = player.skills.getSkill(SkillType::MINING).getModifier();
+                            int miningDamage = (int)(25 * miningModifier);
+                            
+                            int resourceGained = node.mine(miningDamage);
                             if (resourceGained > 0) {
                                 inventory.addResource(node.type, resourceGained);
+                                // Award more Mining XP for depleting a node
+                                player.skills.getSkill(SkillType::MINING).addExperience(10.0f);
+                            } else {
+                                // Award Mining XP for each mining action
+                                player.skills.getSkill(SkillType::MINING).addExperience(2.0f);
                             }
                             minedSomething = true;
                             break; // Mine one node at a time

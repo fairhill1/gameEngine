@@ -72,11 +72,12 @@ CMakeLists.txt        # Build configuration
 - **SPACE** - Mine nearby resource nodes (3.0 unit range)
 - **I** - Toggle inventory overlay
 - **O** - Toggle debug overlay (FPS, chunks, player position)
+- **C** - Toggle skills overlay (shows Athletics and Unarmed skills)
 
 ### Health & Combat Testing
 - **H** - Test player damage (20 HP, 1-second immunity)
 - **J** - Test player healing (25 HP)
-- **K** - Test attack nearby NPCs (3.0 unit range, 25 damage)
+- **K** - Test attack nearby NPCs (3.0 unit range, 25 damage + Unarmed skill modifier)
 
 ### System
 - **ESC** - Exit game
@@ -517,6 +518,79 @@ float distance = 5.0f + (bx::cos(position.z * 0.8f + stateTimer) * 0.5f + 0.5f) 
 - **Persistent Behavior**: Same world coordinates always generate same NPCs
 - **Performance**: ~1-3 NPCs per chunk maximum, depending on biome density
 
+## Player Skills System
+
+### Architecture Overview
+The game features a **skill-based progression system** that tracks player abilities and provides gameplay modifiers. Skills gain experience through related activities and level up automatically, providing percentage-based bonuses.
+
+### Current Skills
+
+#### Athletics
+- **XP Gain**: Movement-based
+  - Walking: 0.5 XP per unit traveled
+  - Running/Sprinting: 2.0 XP per unit traveled
+- **Effect**: +5% movement speed per level (multiplicative)
+- **Leveling**: Exponential curve - each level requires 50% more XP than previous
+
+#### Unarmed
+- **XP Gain**: Combat-based
+  - Successful hit: 5 XP
+  - Miss: 1 XP (practice bonus)
+- **Effect**: +5% damage per level when fighting without weapons
+- **Leveling**: Same exponential curve as Athletics
+
+### Skills UI
+- **Toggle**: Press 'C' to show/hide skills overlay
+- **Position**: Bottom-left corner of screen
+- **Display Format**:
+  ```
+  === SKILLS ===
+  Athletics Lv.3
+    XP: 45/225 (20%)
+  Unarmed Lv.2
+    XP: 30/150 (20%)
+  ===============
+  Press C to close
+  ```
+
+### Key Classes
+
+#### Skill Structure
+```cpp
+struct Skill {
+    std::string name;
+    int level;
+    float experience;
+    float experienceToNextLevel;
+    
+    void calculateExpToNextLevel() {
+        experienceToNextLevel = 100.0f * bx::pow(1.5f, (float)(level - 1));
+    }
+    
+    float getModifier() const {
+        return 1.0f + (level - 1) * 0.05f;  // 5% per level
+    }
+};
+```
+
+#### PlayerSkills Manager
+```cpp
+struct PlayerSkills {
+    std::unordered_map<SkillType, Skill> skills;
+    bool showOverlay = false;
+    
+    void toggleOverlay();       // C key toggle
+    void renderOverlay() const; // BGFX debug text UI
+    Skill& getSkill(SkillType type);
+};
+```
+
+### Implementation Details
+- **XP Tracking**: Distance-based for Athletics, accumulated until 1 unit traveled
+- **Level Up**: Automatic with console notification when XP threshold reached
+- **Modifier Application**: Real-time speed and damage calculations
+- **Save/Load**: Currently session-based (not persistent between runs)
+
 ## Player Health System
 
 ### Architecture Overview
@@ -760,12 +834,15 @@ make && ./MyFirstCppGame
 8. **Player Health System** - 100 HP with top-screen display, damage immunity, respawn
 9. **NPC Health System** - Type-specific health pools (40-80 HP) with visual damage indicators
 10. **Combat Framework** - Damage/healing mechanics, hostility states, testing keys (H/J/K)
+11. **Player Skills System** - Athletics (movement XP) and Unarmed (combat XP) skills with level progression
 
 ### 🎯 Planned Next Features
 1. **Crafting System** - Convert resources into tools/items (hotkey: TAB)
 2. **Character Stats Screen** - Player progression tracking (hotkey: P)
 3. **Tool Durability** - Crafted mining tools with efficiency bonuses
 4. **NPC Interaction** - Trade with merchants, quests from villagers
+5. **Additional Skills** - Mining, Crafting, Trading skills
+6. **Skill Persistence** - Save/load skill progress between sessions
 
 ## Future Improvements
 1. Fix glTF buffer parsing for complex models
