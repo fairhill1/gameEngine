@@ -517,6 +517,204 @@ float distance = 5.0f + (bx::cos(position.z * 0.8f + stateTimer) * 0.5f + 0.5f) 
 - **Persistent Behavior**: Same world coordinates always generate same NPCs
 - **Performance**: ~1-3 NPCs per chunk maximum, depending on biome density
 
+## Player Health System
+
+### Architecture Overview
+The game features a **complete player health system** with visual feedback, damage immunity, and respawn mechanics. Health is permanently displayed at the top-middle of the screen with color-coded status indicators.
+
+### Health Display & UI
+
+#### Health Bar (Always Visible)
+- **Location**: Top-middle of screen
+- **Format**: "Health: 100/100"
+- **Position**: Centered horizontally, top row
+- **Color Coding**: 
+  - 🟢 **Green** (70%+ health) - Healthy state
+  - 🟡 **Yellow** (30%-70% health) - Injured state  
+  - 🔴 **Red** (below 30% health) - Critical state
+
+### Health Mechanics
+
+#### Core Stats
+```cpp
+struct Player {
+    int health = 100;           // Current health points
+    int maxHealth = 100;        // Maximum health capacity
+    float lastDamageTime = 0.0f; // For damage immunity tracking
+};
+```
+
+#### Damage System
+- **Damage Immunity**: 1.0 second cooldown between damage instances
+- **Damage Method**: `player.takeDamage(damage, currentTime)`
+- **Console Feedback**: Damage taken messages with current health
+- **Death Handling**: Automatic respawn when health reaches 0
+
+#### Healing System
+- **Healing Method**: `player.heal(amount)`
+- **Health Cap**: Cannot exceed maxHealth (100 HP)
+- **Console Feedback**: Healing messages with current health
+- **Instant Effect**: No cooldown or delay
+
+#### Respawn System
+- **Trigger**: Automatic when health ≤ 0
+- **Respawn Location**: World origin (0, 0, 0)
+- **Health Reset**: Full health restoration (100/100)
+- **State Reset**: Clears movement targets and damage immunity
+
+### Key Methods
+
+```cpp
+// Damage with immunity checking
+void takeDamage(int damage, float currentTime) {
+    if (canTakeDamage(currentTime)) {
+        health = bx::max(0, health - damage);
+        // Handle death and respawn automatically
+    }
+}
+
+// Healing with health cap
+void heal(int amount) {
+    health = bx::min(maxHealth, health + amount);
+}
+
+// Visual health bar rendering
+void renderHealthBar() const {
+    // Color-coded health display using BGFX debug text
+}
+```
+
+## NPC Health System
+
+### Architecture Overview  
+NPCs feature **individual health pools** with visual damage indicators, hostility states, and type-specific health values. Health affects NPC behavior and visual appearance through dynamic color changes.
+
+### Health by NPC Type
+
+#### Health Distribution
+1. **🟢 Wanderers**: 60 HP
+   - **Role**: Medium threat, balanced stats
+   - **Behavior**: Becomes hostile when attacked
+   - **Combat**: Moderate health pool for extended fights
+
+2. **🔵 Villagers**: 40 HP  
+   - **Role**: Peaceful civilians, lowest threat
+   - **Behavior**: Never becomes hostile (flees instead)
+   - **Combat**: Low health, easy to defeat
+
+3. **🟠 Merchants**: 80 HP
+   - **Role**: Well-armed traders, highest threat
+   - **Behavior**: Becomes hostile when attacked
+   - **Combat**: High health pool, toughest opponents
+
+### Visual Health Indicators
+
+NPCs use **dynamic color changes** to show health status and hostility:
+
+#### Peaceful NPCs (Not Attacked)
+- **70%-100% Health**: Full bright base colors
+  - Wanderers: Bright green (`0xff00AA00`)
+  - Villagers: Bright blue (`0xff0066FF`)
+  - Merchants: Bright orange (`0xffFFAA00`)
+
+- **30%-70% Health**: 50% darker base colors
+  - Color channels reduced by half for visible damage indication
+
+- **0%-30% Health**: 75% darker base colors  
+  - Color channels reduced to 25% for critical damage state
+
+#### Hostile NPCs (When Attacked)
+- **All Health Levels**: Red tint override
+  - **70%-100% Health**: Dark red (`0xffAA0000`)
+  - **30%-70% Health**: Darker red (`0xff880000`)  
+  - **0%-30% Health**: Very dark red (`0xff660000`)
+
+#### Dead NPCs
+- **0 Health**: Dark gray (`0xff404040`)
+- **Inactive State**: Stop rendering and AI updates
+
+### Combat Mechanics
+
+#### Damage System
+```cpp
+void takeDamage(int damage, float currentTime) {
+    health = bx::max(0, health - damage);
+    updateHealthColor();        // Visual feedback
+    
+    // Hostility logic based on NPC type
+    if (type != NPCType::VILLAGER) {
+        isHostile = true;       // Wanderers/Merchants fight back
+    }
+    // Villagers remain peaceful (flee instead)
+}
+```
+
+#### Damage Immunity
+- **Cooldown**: 0.5 seconds between damage instances
+- **Method**: `canTakeDamage(currentTime)` 
+- **Purpose**: Prevents damage spam, allows tactical combat
+
+#### Hostility System
+- **Trigger**: Taking damage from player
+- **Wanderer Response**: Becomes hostile, aggressive AI
+- **Merchant Response**: Becomes hostile, defensive behavior
+- **Villager Response**: Remains peaceful, flees from combat
+
+### Key Classes & Methods
+
+#### NPC Health Structure
+```cpp
+struct NPC {
+    int health, maxHealth;      // Health tracking
+    bool isHostile;             // Combat state
+    float lastDamageTime;       // Damage immunity
+    uint32_t color, baseColor;  // Visual health feedback
+    
+    void takeDamage(int damage, float currentTime);
+    void updateHealthColor();   // Dynamic color calculation
+    bool canTakeDamage(float currentTime) const;
+    void heal(int amount);      // Healing capability
+};
+```
+
+#### Health Color Algorithm
+```cpp
+void updateHealthColor() {
+    float healthPercent = (float)health / (float)maxHealth;
+    
+    if (isHostile) {
+        // Red tint for hostile NPCs
+        color = calculateRedTint(healthPercent);
+    } else {
+        // Darker base color for peaceful damaged NPCs  
+        color = calculateDarkenedColor(baseColor, healthPercent);
+    }
+}
+```
+
+### Combat Integration
+
+#### Testing Framework
+- **K Key**: Attack nearby NPCs (3.0 unit range, 25 damage)
+- **Range Check**: Distance calculation from player position
+- **Target Selection**: Attacks closest NPC in range
+- **Feedback**: Console output for damage/death events
+
+#### Combat Flow
+1. **Player initiates attack** (K key press)
+2. **Range checking** for nearby NPCs (3.0 units)
+3. **Damage application** with immunity checking
+4. **Visual update** through color changes
+5. **Hostility state change** (except villagers)
+6. **Death handling** when health reaches 0
+
+### Performance Considerations
+
+- **Color Updates**: Only when health changes, not every frame
+- **Immunity Checking**: Lightweight time comparison
+- **Visual Changes**: Dynamic color calculation without vertex buffer updates
+- **Memory**: Health data adds ~24 bytes per NPC
+
 ### Testing Changes
 ```bash
 make && ./MyFirstCppGame
@@ -559,6 +757,9 @@ make && ./MyFirstCppGame
 5. **AI Behavior States** - Idle, pathfinding, and terrain-following movement
 6. **Resource Node Textures** - Proper vertex colors for copper (orange), iron (gray), stone (brown)
 7. **Console Output Cleanup** - Removed debug spam from inventory system
+8. **Player Health System** - 100 HP with top-screen display, damage immunity, respawn
+9. **NPC Health System** - Type-specific health pools (40-80 HP) with visual damage indicators
+10. **Combat Framework** - Damage/healing mechanics, hostility states, testing keys (H/J/K)
 
 ### 🎯 Planned Next Features
 1. **Crafting System** - Convert resources into tools/items (hotkey: TAB)

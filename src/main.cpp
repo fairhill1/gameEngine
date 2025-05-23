@@ -154,16 +154,40 @@ static PosColorVertex stoneCubeVertices[] = {
     { 1.0f, -1.0f, -1.0f, 0xff504540}  // 7: Back-bottom-right (darker stone)
 };
 
-// NPC cube vertices (will be dynamically colored)
-static PosColorVertex npcCubeVertices[] = {
-    {-1.0f,  1.0f,  1.0f, 0xff00AA00}, // 0: Front-top-left (will be set per NPC)
+// Wanderer NPC cube vertices (green)
+static PosColorVertex wandererCubeVertices[] = {
+    {-1.0f,  1.0f,  1.0f, 0xff00AA00}, // 0: Front-top-left (green)
     { 1.0f,  1.0f,  1.0f, 0xff00AA00}, // 1: Front-top-right
-    {-1.0f, -1.0f,  1.0f, 0xff008800}, // 2: Front-bottom-left (darker variant)
-    { 1.0f, -1.0f,  1.0f, 0xff008800}, // 3: Front-bottom-right (darker variant)
-    {-1.0f,  1.0f, -1.0f, 0xff00CC00}, // 4: Back-top-left (lighter variant)
-    { 1.0f,  1.0f, -1.0f, 0xff00CC00}, // 5: Back-top-right (lighter variant)
-    {-1.0f, -1.0f, -1.0f, 0xff008800}, // 6: Back-bottom-left (darker variant)
-    { 1.0f, -1.0f, -1.0f, 0xff008800}  // 7: Back-bottom-right (darker variant)
+    {-1.0f, -1.0f,  1.0f, 0xff008800}, // 2: Front-bottom-left (darker green)
+    { 1.0f, -1.0f,  1.0f, 0xff008800}, // 3: Front-bottom-right (darker green)
+    {-1.0f,  1.0f, -1.0f, 0xff00CC00}, // 4: Back-top-left (lighter green)
+    { 1.0f,  1.0f, -1.0f, 0xff00CC00}, // 5: Back-top-right (lighter green)
+    {-1.0f, -1.0f, -1.0f, 0xff008800}, // 6: Back-bottom-left (darker green)
+    { 1.0f, -1.0f, -1.0f, 0xff008800}  // 7: Back-bottom-right (darker green)
+};
+
+// Villager NPC cube vertices (blue)
+static PosColorVertex villagerCubeVertices[] = {
+    {-1.0f,  1.0f,  1.0f, 0xff0066FF}, // 0: Front-top-left (blue)
+    { 1.0f,  1.0f,  1.0f, 0xff0066FF}, // 1: Front-top-right
+    {-1.0f, -1.0f,  1.0f, 0xff0044CC}, // 2: Front-bottom-left (darker blue)
+    { 1.0f, -1.0f,  1.0f, 0xff0044CC}, // 3: Front-bottom-right (darker blue)
+    {-1.0f,  1.0f, -1.0f, 0xff0088FF}, // 4: Back-top-left (lighter blue)
+    { 1.0f,  1.0f, -1.0f, 0xff0088FF}, // 5: Back-top-right (lighter blue)
+    {-1.0f, -1.0f, -1.0f, 0xff0044CC}, // 6: Back-bottom-left (darker blue)
+    { 1.0f, -1.0f, -1.0f, 0xff0044CC}  // 7: Back-bottom-right (darker blue)
+};
+
+// Merchant NPC cube vertices (orange)
+static PosColorVertex merchantCubeVertices[] = {
+    {-1.0f,  1.0f,  1.0f, 0xffFFAA00}, // 0: Front-top-left (orange)
+    { 1.0f,  1.0f,  1.0f, 0xffFFAA00}, // 1: Front-top-right
+    {-1.0f, -1.0f,  1.0f, 0xffCC8800}, // 2: Front-bottom-left (darker orange)
+    { 1.0f, -1.0f,  1.0f, 0xffCC8800}, // 3: Front-bottom-right (darker orange)
+    {-1.0f,  1.0f, -1.0f, 0xffFFCC00}, // 4: Back-top-left (lighter orange)
+    { 1.0f,  1.0f, -1.0f, 0xffFFCC00}, // 5: Back-top-right (lighter orange)
+    {-1.0f, -1.0f, -1.0f, 0xffCC8800}, // 6: Back-bottom-left (darker orange)
+    { 1.0f, -1.0f, -1.0f, 0xffCC8800}  // 7: Back-bottom-right (darker orange)
 };
 
 // Textured cube vertices
@@ -1822,8 +1846,14 @@ int main(int argc, char* argv[]) {
     bgfx::VertexBufferHandle stoneVbh = bgfx::createVertexBuffer(
         bgfx::makeRef(stoneCubeVertices, sizeof(stoneCubeVertices)), layout);
     
-    bgfx::VertexBufferHandle npcVbh = bgfx::createVertexBuffer(
-        bgfx::makeRef(npcCubeVertices, sizeof(npcCubeVertices)), layout);
+    bgfx::VertexBufferHandle wandererVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(wandererCubeVertices, sizeof(wandererCubeVertices)), layout);
+    
+    bgfx::VertexBufferHandle villagerVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(villagerCubeVertices, sizeof(villagerCubeVertices)), layout);
+    
+    bgfx::VertexBufferHandle merchantVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(merchantCubeVertices, sizeof(merchantCubeVertices)), layout);
     
     bgfx::VertexBufferHandle texVbh = bgfx::createVertexBuffer(
         bgfx::makeRef(texCubeVertices, sizeof(texCubeVertices)), texLayout);
@@ -2324,7 +2354,22 @@ int main(int argc, char* argv[]) {
             bx::mtxTranslate(npcTranslation, npc.position.x, npc.position.y, npc.position.z);
             bx::mtxMul(npcMatrix, npcScale, npcTranslation);
             
-            // Use NPC vertex buffer (we'll update colors dynamically later if needed)
+            // Use appropriate vertex buffer based on NPC type
+            bgfx::VertexBufferHandle npcVbh;
+            switch (npc.type) {
+                case NPCType::WANDERER:
+                    npcVbh = wandererVbh;
+                    break;
+                case NPCType::VILLAGER:
+                    npcVbh = villagerVbh;
+                    break;
+                case NPCType::MERCHANT:
+                    npcVbh = merchantVbh;
+                    break;
+                default:
+                    npcVbh = wandererVbh; // Fallback
+                    break;
+            }
             render_object_at_position(npcVbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, npcMatrix);
         }
         
@@ -2406,6 +2451,11 @@ int main(int argc, char* argv[]) {
     bgfx::destroy(ibh);
     bgfx::destroy(vbh);
     bgfx::destroy(copperVbh);
+    bgfx::destroy(ironVbh);
+    bgfx::destroy(stoneVbh);
+    bgfx::destroy(wandererVbh);
+    bgfx::destroy(villagerVbh);
+    bgfx::destroy(merchantVbh);
     bgfx::destroy(texIbh);
     bgfx::destroy(texVbh);
     bgfx::destroy(program);
