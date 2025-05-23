@@ -989,8 +989,7 @@ CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o: src/main.cpp \
   src/npcs.h \
   src/player.h \
   src/resources.h \
-  src/skills.h \
-  src/terrain.h
+  src/skills.h
 
 CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o: src/model.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \
@@ -5998,8 +5997,6 @@ sdl_src/SDL-release-3.2.14/include/SDL3/SDL_error.h:
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/iterator:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/type_list.h:
-
-src/terrain.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__random/exponential_distribution.h:
 

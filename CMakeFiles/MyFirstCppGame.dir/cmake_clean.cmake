@@ -1,4 +1,6 @@
 file(REMOVE_RECURSE
+  "CMakeFiles/MyFirstCppGame.dir/src/camera.cpp.o"
+  "CMakeFiles/MyFirstCppGame.dir/src/camera.cpp.o.d"
   "CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o"
   "CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o.d"
   "CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o"

@@ -35,6 +35,7 @@ set(SOURCES
     src/resources.cpp
     src/npcs.cpp
     src/player.cpp
+    src/camera.cpp
 )
 
 # Create executable

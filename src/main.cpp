@@ -49,6 +49,7 @@ namespace tinygltf {
 #include "resources.h"
 #include "npcs.h"
 #include "player.h"
+#include "camera.h"
 
 // Window dimensions
 const int WINDOW_WIDTH = 800;
@@ -58,10 +59,6 @@ const char* WINDOW_TITLE = "My First C++ Game with BGFX";
 // Colors
 const uint32_t CLEAR_COLOR = 0x303030ff;
 
-// Camera settings
-const float CAMERA_MOVE_SPEED = 0.1f;
-const float CAMERA_SPRINT_MULTIPLIER = 3.0f;
-const float CAMERA_ROTATE_SPEED = 0.005f;
 
 // Debug overlay system
 struct DebugOverlay {
@@ -1956,24 +1953,10 @@ int main(int argc, char* argv[]) {
     std::string hoverInfo = "";
     bool hasHoverInfo = false;
     
-    // Camera variables - set to bird's eye view of player
-    bx::Vec3 cameraPos = {player.position.x, player.position.y + 15.0f, player.position.z + 8.0f};
-    
-    // Calculate initial camera orientation to look at player
-    float dirX = player.position.x - cameraPos.x;
-    float dirY = player.position.y - cameraPos.y;
-    float dirZ = player.position.z - cameraPos.z;
-    float horizontalDist = bx::sqrt(dirX * dirX + dirZ * dirZ);
-    
-    float cameraYaw = bx::atan2(dirX, dirZ);
-    float cameraPitch = bx::atan2(-dirY, horizontalDist);
-    
+    // Camera system
+    Camera camera;
+    camera.setToPlayerBirdsEye(player);
     std::cout << "Initial camera set to bird's eye view of player" << std::endl;
-    
-    // Mouse variables for camera rotation
-    float prevMouseX = 0.0f;
-    float prevMouseY = 0.0f;
-    bool mouseDown = false;
     
     // Mouse variables for terrain picking
     float pendingMouseX = 0.0f;
@@ -2001,25 +1984,7 @@ int main(int argc, char* argv[]) {
                 }
                 else if (event.key.key == SDLK_1) {
                     // Jump to bird's eye view of player
-                    cameraPos.x = player.position.x;
-                    cameraPos.y = player.position.y + 15.0f; // Bird's eye height
-                    cameraPos.z = player.position.z + 8.0f;  // Slightly back from player
-                    
-                    // Calculate direction vector from camera to player
-                    float dirX = player.position.x - cameraPos.x;
-                    float dirY = player.position.y - cameraPos.y;
-                    float dirZ = player.position.z - cameraPos.z;
-                    
-                    // Calculate horizontal distance for pitch calculation
-                    float horizontalDist = bx::sqrt(dirX * dirX + dirZ * dirZ);
-                    
-                    // Calculate pitch (looking down at player)
-                    cameraPitch = bx::atan2(-dirY, horizontalDist);
-                    
-                    // Calculate yaw (horizontal rotation toward player)
-                    cameraYaw = bx::atan2(dirX, dirZ);
-                    
-                    std::cout << "Camera jumped to bird's eye view of player (pitch: " << cameraPitch << ", yaw: " << cameraYaw << ")" << std::endl;
+                    camera.setToPlayerBirdsEye(player);
                 }
                 else if (event.key.key == SDLK_O) {
                     // Toggle debug overlay
@@ -2089,8 +2054,7 @@ int main(int argc, char* argv[]) {
             }
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    mouseDown = true;
-                    SDL_GetMouseState(&prevMouseX, &prevMouseY);
+                    camera.handleMouseButton(event);
                 }
                 else if (event.button.button == SDL_BUTTON_RIGHT) {
                     // Right click for terrain picking with double-click detection
@@ -2113,85 +2077,24 @@ int main(int argc, char* argv[]) {
                 }
             }
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-                if (event.button.button == SDL_BUTTON_LEFT) {
-                    mouseDown = false;
-                }
+                camera.handleMouseButton(event);
             }
             else if (event.type == SDL_EVENT_MOUSE_MOTION) {
-                if (mouseDown) {
-                    float mouseX, mouseY;
-                    SDL_GetMouseState(&mouseX, &mouseY);
-                    
-                    float deltaX = mouseX - prevMouseX;
-                    float deltaY = mouseY - prevMouseY;
-                    
-                    cameraYaw += deltaX * CAMERA_ROTATE_SPEED;
-                    cameraPitch += deltaY * CAMERA_ROTATE_SPEED;
-                    
-                    if (cameraPitch > bx::kPi * 0.49f) cameraPitch = bx::kPi * 0.49f;
-                    if (cameraPitch < -bx::kPi * 0.49f) cameraPitch = -bx::kPi * 0.49f;
-                    
-                    prevMouseX = mouseX;
-                    prevMouseY = mouseY;
-                }
+                camera.handleMouseMotion(event);
             }
         }
         
         keyboardState = SDL_GetKeyboardState(NULL);
         
-        // Process WASD movement
-        float forward[3] = { 
-            bx::sin(cameraYaw) * bx::cos(cameraPitch),
-            -bx::sin(cameraPitch),
-            bx::cos(cameraYaw) * bx::cos(cameraPitch)
-        };
-        
-        float right[3] = {
-            bx::cos(cameraYaw), 0.0f, -bx::sin(cameraYaw)
-        };
-        
-        bool sprinting = keyboardState[SDL_SCANCODE_LSHIFT] || keyboardState[SDL_SCANCODE_RSHIFT];
-        float currentSpeed = CAMERA_MOVE_SPEED * (sprinting ? CAMERA_SPRINT_MULTIPLIER : 1.0f);
-        
-        if (keyboardState[SDL_SCANCODE_W]) {
-            cameraPos.x += forward[0] * currentSpeed;
-            cameraPos.y += forward[1] * currentSpeed;
-            cameraPos.z += forward[2] * currentSpeed;
-        }
-        if (keyboardState[SDL_SCANCODE_S]) {
-            cameraPos.x -= forward[0] * currentSpeed;
-            cameraPos.y -= forward[1] * currentSpeed;
-            cameraPos.z -= forward[2] * currentSpeed;
-        }
-        if (keyboardState[SDL_SCANCODE_A]) {
-            cameraPos.x -= right[0] * currentSpeed;
-            cameraPos.y -= right[1] * currentSpeed;
-            cameraPos.z -= right[2] * currentSpeed;
-        }
-        if (keyboardState[SDL_SCANCODE_D]) {
-            cameraPos.x += right[0] * currentSpeed;
-            cameraPos.y += right[1] * currentSpeed;
-            cameraPos.z += right[2] * currentSpeed;
-        }
-        if (keyboardState[SDL_SCANCODE_Q]) {
-            cameraPos.y += currentSpeed;
-        }
-        if (keyboardState[SDL_SCANCODE_E]) {
-            cameraPos.y -= currentSpeed;
-        }
-        
         time += 0.01f;
         float deltaTime = 0.01f; // Fixed delta time for now
-
-        // Set up camera view matrix
-        bx::Vec3 target = {
-            cameraPos.x + forward[0],
-            cameraPos.y + forward[1],
-            cameraPos.z + forward[2]
-        };
         
+        // Update camera with keyboard input
+        camera.handleKeyboardInput(keyboardState, deltaTime);
+        
+        // Set up camera view matrix
         float view[16];
-        bx::mtxLookAt(view, cameraPos, target);
+        camera.getViewMatrix(view);
         
         float proj[16];
         bx::mtxProj(proj, 60.0f, float(WINDOW_WIDTH) / float(WINDOW_HEIGHT), 0.1f, 100.0f, 
