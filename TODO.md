@@ -13,7 +13,6 @@
 - lightning
 - day/night cycles w sun & moon
 - savegame
-- combat system
 - basic sounds
 - weapons & armor
 
@@ -27,6 +26,7 @@
 # 0.1.1
 
 - sealevel, rivers, lake
+- combat system
 
 # 0.1 - 22.05.2025
 

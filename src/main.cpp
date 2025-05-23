@@ -1416,6 +1416,91 @@ private:
     }
 };
 
+// Skill types
+enum class SkillType {
+    ATHLETICS,
+    UNARMED
+};
+
+// Skill structure
+struct Skill {
+    std::string name;
+    int level;
+    float experience;
+    float experienceToNextLevel;
+    
+    Skill(const std::string& skillName, int startLevel = 1) 
+        : name(skillName), level(startLevel), experience(0.0f) {
+        calculateExpToNextLevel();
+    }
+    
+    void calculateExpToNextLevel() {
+        // Simple exponential curve for leveling
+        experienceToNextLevel = 100.0f * bx::pow(1.5f, (float)(level - 1));
+    }
+    
+    void addExperience(float exp) {
+        experience += exp;
+        while (experience >= experienceToNextLevel) {
+            experience -= experienceToNextLevel;
+            level++;
+            calculateExpToNextLevel();
+            std::cout << name << " leveled up to " << level << "!" << std::endl;
+        }
+    }
+    
+    float getModifier() const {
+        // Each level gives 5% improvement
+        return 1.0f + (level - 1) * 0.05f;
+    }
+};
+
+// Player skills overlay
+struct PlayerSkills {
+    std::unordered_map<SkillType, Skill> skills;
+    bool showOverlay = false;
+    
+    PlayerSkills() {
+        // Initialize skills
+        skills.emplace(SkillType::ATHLETICS, Skill("Athletics", 1));
+        skills.emplace(SkillType::UNARMED, Skill("Unarmed", 1));
+    }
+    
+    void toggleOverlay() {
+        showOverlay = !showOverlay;
+        std::cout << "Skills overlay " << (showOverlay ? "enabled" : "disabled") << std::endl;
+    }
+    
+    void renderOverlay() const {
+        if (!showOverlay) return;
+        
+        // Position skills in bottom left corner
+        int x = 1;
+        int y = 25; // Bottom left, safe for 600px window (about 37 rows total)
+        
+        // Render skills header
+        bgfx::dbgTextPrintf(x, y, 0x0f, "=== SKILLS ===");
+        
+        // Render each skill
+        int lineOffset = 1;
+        for (const auto& [type, skill] : skills) {
+            int xpPercent = (int)((skill.experience / skill.experienceToNextLevel) * 100.0f);
+            bgfx::dbgTextPrintf(x, y + lineOffset, 0x0b, "%s Lv.%d", skill.name.c_str(), skill.level);
+            bgfx::dbgTextPrintf(x, y + lineOffset + 1, 0x03, "  XP: %d/%d (%d%%)", 
+                               (int)skill.experience, (int)skill.experienceToNextLevel, xpPercent);
+            lineOffset += 2;
+        }
+        
+        // Render footer
+        bgfx::dbgTextPrintf(x, y + lineOffset, 0x0f, "===============");
+        bgfx::dbgTextPrintf(x, y + lineOffset + 1, 0x0a, "Press C to close");
+    }
+    
+    Skill& getSkill(SkillType type) {
+        return skills.at(type);
+    }
+};
+
 // Player system
 struct Player {
     bx::Vec3 position;
@@ -1439,11 +1524,17 @@ struct Player {
     bool inCombat;
     float hitFlashTimer;     // Red flash when hit
     
+    // Skills
+    PlayerSkills skills;
+    float lastMovementTime;
+    float distanceTraveled;
+    
     Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
                hasTarget(false), isSprinting(false), moveSpeed(0.05f), sprintSpeed(0.15f), size(0.3f),
                health(100), maxHealth(100), lastDamageTime(0.0f),
                combatTarget(nullptr), lastAttackTime(0.0f), attackCooldown(1.2f),
-               attackDamage(15), hitChance(0.8f), dodgeChance(0.3f), inCombat(false), hitFlashTimer(0.0f) {}
+               attackDamage(15), hitChance(0.8f), dodgeChance(0.3f), inCombat(false), hitFlashTimer(0.0f),
+               lastMovementTime(0.0f), distanceTraveled(0.0f) {}
     
     void setTarget(float x, float z, const ChunkManager& chunkManager, bool sprint = false) {
         targetPosition.x = x;
@@ -1459,6 +1550,9 @@ struct Player {
             hitFlashTimer -= deltaTime;
             if (hitFlashTimer < 0) hitFlashTimer = 0;
         }
+        
+        // Track movement for Athletics XP
+        bx::Vec3 oldPosition = position;
         
         // Handle combat if we have a target
         if (combatTarget && combatTarget->isActive) {
@@ -1489,11 +1583,18 @@ struct Player {
                     float dodgeRoll = (rand() % 100) / 100.0f;
                     
                     if (hitRoll < hitChance && dodgeRoll > combatTarget->dodgeChance) {
-                        // Hit!
-                        combatTarget->takeDamage(attackDamage, currentTime);
-                        std::cout << "Player hits " << combatTarget->getTypeName() << " for " << attackDamage << " damage!" << std::endl;
+                        // Hit! Apply Unarmed skill modifier to damage
+                        float unarmedModifier = skills.getSkill(SkillType::UNARMED).getModifier();
+                        int actualDamage = (int)(attackDamage * unarmedModifier);
+                        combatTarget->takeDamage(actualDamage, currentTime);
+                        std::cout << "Player hits " << combatTarget->getTypeName() << " for " << actualDamage << " damage!" << std::endl;
+                        
+                        // Award Unarmed XP for successful hits
+                        skills.getSkill(SkillType::UNARMED).addExperience(5.0f);
                     } else {
                         std::cout << "Player misses!" << std::endl;
+                        // Small XP even for misses to encourage practice
+                        skills.getSkill(SkillType::UNARMED).addExperience(1.0f);
                     }
                     
                     lastAttackTime = currentTime;
@@ -1503,10 +1604,13 @@ struct Player {
                 combatTarget = nullptr;
                 inCombat = false;
             } else {
-                // Move toward combat target
-                hasTarget = true;
+                // Not in combat range yet - keep moving toward target
+                // Update target position in case NPC moved
                 targetPosition = combatTarget->position;
-                isSprinting = true; // Sprint to combat
+                if (!hasTarget) {
+                    hasTarget = true;
+                    isSprinting = true; // Sprint to combat
+                }
             }
         } else {
             inCombat = false;
@@ -1530,7 +1634,9 @@ struct Player {
                 direction.x /= distance;
                 direction.z /= distance;
                 
-                float currentSpeed = isSprinting ? sprintSpeed : moveSpeed;
+                // Apply Athletics modifier to speed
+                float athleticsModifier = skills.getSkill(SkillType::ATHLETICS).getModifier();
+                float currentSpeed = (isSprinting ? sprintSpeed : moveSpeed) * athleticsModifier;
                 position.x += direction.x * currentSpeed;
                 position.z += direction.z * currentSpeed;
                 position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
@@ -1539,6 +1645,22 @@ struct Player {
         
         // Always update Y position
         position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f;
+        
+        // Calculate distance traveled and award Athletics XP
+        float dx = position.x - oldPosition.x;
+        float dz = position.z - oldPosition.z;
+        float distance = bx::sqrt(dx * dx + dz * dz);
+        
+        if (distance > 0.001f) { // Only if we actually moved
+            distanceTraveled += distance;
+            
+            // Award XP every unit of distance traveled
+            float xpPerUnit = isSprinting ? 2.0f : 0.5f; // More XP for running
+            if (distanceTraveled >= 1.0f) {
+                skills.getSkill(SkillType::ATHLETICS).addExperience(xpPerUnit * distanceTraveled);
+                distanceTraveled = 0.0f;
+            }
+        }
     }
     
     void takeDamage(int damage, float currentTime) {
@@ -2594,6 +2716,11 @@ int main(int argc, char* argv[]) {
                     player.heal(25);
                     std::cout << "J key pressed - test healing applied!" << std::endl;
                 }
+                else if (event.key.key == SDLK_C) {
+                    // Toggle skills overlay
+                    std::cout << "C key pressed - toggling skills..." << std::endl;
+                    player.skills.toggleOverlay();
+                }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
                 int width = event.window.data1;
@@ -2759,11 +2886,15 @@ int main(int argc, char* argv[]) {
             }
             
             if (clickedNPC) {
-                // Clicked on an NPC - initiate combat
+                // Clicked on an NPC - set as combat target and move toward them
                 player.combatTarget = clickedNPC;
                 clickedNPC->combatTarget = &player;
                 clickedNPC->isHostile = true;
-                std::cout << "Initiating combat with " << clickedNPC->getTypeName() << "!" << std::endl;
+                
+                // Set movement target to NPC position so player moves toward them
+                player.setTarget(clickedNPC->position.x, clickedNPC->position.z, chunkManager, shouldSprint);
+                
+                std::cout << "Targeting " << clickedNPC->getTypeName() << " for combat!" << std::endl;
             } else {
                 // No NPC clicked, check terrain
                 bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
@@ -3086,6 +3217,9 @@ int main(int argc, char* argv[]) {
         
         // Render inventory overlay if enabled
         inventory.renderOverlay();
+        
+        // Render skills overlay if enabled
+        player.skills.renderOverlay();
         
         // Render player health bar (always visible)
         player.renderHealthBar();
