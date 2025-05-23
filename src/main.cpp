@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+#include <cfloat>
 #include <random>
 #include <unordered_map>
 #include <string>
@@ -1612,9 +1613,10 @@ Ray createRayFromMouse(float mouseX, float mouseY, int screenWidth, int screenHe
     };
     rayDirection = bx::normalize(rayDirection);
     
-    std::cout << "Mouse: (" << mouseX << ", " << mouseY << ") -> NDC: (" << mouseXNDC << ", " << mouseYNDC << ")" << std::endl;
-    std::cout << "Ray origin: (" << pickEye.x << ", " << pickEye.y << ", " << pickEye.z << ")" << std::endl;
-    std::cout << "Ray direction: (" << rayDirection.x << ", " << rayDirection.y << ", " << rayDirection.z << ")" << std::endl;
+    // Debug output disabled for hover system
+    // std::cout << "Mouse: (" << mouseX << ", " << mouseY << ") -> NDC: (" << mouseXNDC << ", " << mouseYNDC << ")" << std::endl;
+    // std::cout << "Ray origin: (" << pickEye.x << ", " << pickEye.y << ", " << pickEye.z << ")" << std::endl;
+    // std::cout << "Ray direction: (" << rayDirection.x << ", " << rayDirection.y << ", " << rayDirection.z << ")" << std::endl;
     
     Ray ray = {
         {pickEye.x, pickEye.y, pickEye.z}, 
@@ -1632,8 +1634,9 @@ bool rayTerrainIntersection(const Ray& ray, const ChunkManager& chunkManager, bx
     // Account for terrain offset in rendering (-5.0f in Y)
     const float TERRAIN_Y_OFFSET = -5.0f;
     
-    std::cout << "  Ray intersection - Origin: (" << ray.origin.x << ", " << ray.origin.y << ", " << ray.origin.z << ")" << std::endl;
-    std::cout << "  Ray direction: (" << ray.direction.x << ", " << ray.direction.y << ", " << ray.direction.z << ")" << std::endl;
+    // Debug output disabled for hover system
+    // std::cout << "  Ray intersection - Origin: (" << ray.origin.x << ", " << ray.origin.y << ", " << ray.origin.z << ")" << std::endl;
+    // std::cout << "  Ray direction: (" << ray.direction.x << ", " << ray.direction.y << ", " << ray.direction.z << ")" << std::endl;
     
     int intersectionChecks = 0;
     
@@ -1653,17 +1656,17 @@ bool rayTerrainIntersection(const Ray& ray, const ChunkManager& chunkManager, bx
             hitPoint.z = currentPoint.z;
             hitPoint.y = actualTerrainHeight;
             
-            std::cout << "  Intersection found at t=" << t << ", point=(" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
+            // std::cout << "  Intersection found at t=" << t << ", point=(" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
             return true;
         }
         
         intersectionChecks++;
         t += stepSize;
         
-        // Debug first few checks
-        if (intersectionChecks <= 3) {
-            std::cout << "  Check " << intersectionChecks << ": t=" << t << ", point=(" << currentPoint.x << ", " << currentPoint.y << ", " << currentPoint.z << "), raw_height=" << rawTerrainHeight << ", actual_height=" << actualTerrainHeight << std::endl;
-        }
+        // Debug first few checks - disabled for hover system
+        // if (intersectionChecks <= 3) {
+        //     std::cout << "  Check " << intersectionChecks << ": t=" << t << ", point=(" << currentPoint.x << ", " << currentPoint.y << ", " << currentPoint.z << "), raw_height=" << rawTerrainHeight << ", actual_height=" << actualTerrainHeight << std::endl;
+        // }
         
         // Early exit if we've gone too far below terrain
         if (intersectionChecks > 50 && currentPoint.y < actualTerrainHeight - 10.0f) {
@@ -1671,7 +1674,7 @@ bool rayTerrainIntersection(const Ray& ray, const ChunkManager& chunkManager, bx
         }
     }
     
-    std::cout << "  No intersection found after " << intersectionChecks << " checks" << std::endl;
+    // std::cout << "  No intersection found after " << intersectionChecks << " checks" << std::endl;
     return false;
 }
 
@@ -2212,6 +2215,10 @@ int main(int argc, char* argv[]) {
     SDL_Event event;
     float time = 0.0f;
     
+    // Hover info system variables
+    std::string hoverInfo = "";
+    bool hasHoverInfo = false;
+    
     // Camera variables - set to bird's eye view of player
     bx::Vec3 cameraPos = {player.position.x, player.position.y + 15.0f, player.position.z + 8.0f};
     
@@ -2465,10 +2472,12 @@ int main(int argc, char* argv[]) {
         bgfx::setViewTransform(0, view, proj);
         bgfx::setViewRect(0, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
         
+        // Get current window size for various uses
+        int currentWidth, currentHeight;
+        SDL_GetWindowSize(window, &currentWidth, &currentHeight);
+        
         // Handle terrain picking from right-click
         if (hasPendingClick) {
-            int currentWidth, currentHeight;
-            SDL_GetWindowSize(window, &currentWidth, &currentHeight);
             
             std::cout << "Right-click detected! Window size: " << currentWidth << "x" << currentHeight << std::endl;
             Ray ray = createRayFromMouse(pendingMouseX, pendingMouseY, currentWidth, currentHeight, view, proj);
@@ -2493,6 +2502,102 @@ int main(int argc, char* argv[]) {
         // Update player and chunks
         player.update(chunkManager);
         chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
+        
+        // Check for hover over objects
+        hasHoverInfo = false;
+        hoverInfo = "";
+        
+        // Get current mouse position
+        float currentMouseX, currentMouseY;
+        SDL_GetMouseState(&currentMouseX, &currentMouseY);
+        
+        // Create ray from mouse position
+        Ray hoverRay = createRayFromMouse(currentMouseX, currentMouseY, currentWidth, currentHeight, view, proj);
+        
+        // Check NPCs for hover
+        float closestNPCDist = FLT_MAX;
+        NPC* hoveredNPC = nullptr;
+        
+        for (auto& npc : npcs) {
+            if (!npc.isActive) continue;
+            
+            // Simple ray-sphere intersection test
+            bx::Vec3 toNPC = {
+                npc.position.x - hoverRay.origin.x,
+                npc.position.y - hoverRay.origin.y,
+                npc.position.z - hoverRay.origin.z
+            };
+            
+            float projDist = bx::dot(toNPC, hoverRay.direction);
+            if (projDist < 0) continue; // Behind camera
+            
+            bx::Vec3 closestPoint = {
+                hoverRay.origin.x + hoverRay.direction.x * projDist,
+                hoverRay.origin.y + hoverRay.direction.y * projDist,
+                hoverRay.origin.z + hoverRay.direction.z * projDist
+            };
+            
+            float dx = closestPoint.x - npc.position.x;
+            float dy = closestPoint.y - npc.position.y;
+            float dz = closestPoint.z - npc.position.z;
+            float distToNPC = bx::sqrt(dx*dx + dy*dy + dz*dz);
+            
+            // Check if within NPC's bounding sphere (size * 2 for easier hovering)
+            if (distToNPC <= npc.size * 2.0f && projDist < closestNPCDist) {
+                closestNPCDist = projDist;
+                hoveredNPC = &npc;
+            }
+        }
+        
+        // Check resources for hover (only if no NPC is hovered)
+        if (!hoveredNPC) {
+            float closestResourceDist = FLT_MAX;
+            ResourceNode* hoveredResource = nullptr;
+            
+            for (auto& node : resourceNodes) {
+                if (!node.isActive) continue;
+                
+                // Simple ray-sphere intersection test
+                bx::Vec3 toResource = {
+                    node.position.x - hoverRay.origin.x,
+                    node.position.y - hoverRay.origin.y,
+                    node.position.z - hoverRay.origin.z
+                };
+                
+                float projDist = bx::dot(toResource, hoverRay.direction);
+                if (projDist < 0) continue; // Behind camera
+                
+                bx::Vec3 closestPoint = {
+                    hoverRay.origin.x + hoverRay.direction.x * projDist,
+                    hoverRay.origin.y + hoverRay.direction.y * projDist,
+                    hoverRay.origin.z + hoverRay.direction.z * projDist
+                };
+                
+                float dx = closestPoint.x - node.position.x;
+                float dy = closestPoint.y - node.position.y;
+                float dz = closestPoint.z - node.position.z;
+                float distToResource = bx::sqrt(dx*dx + dy*dy + dz*dz);
+                
+                // Check if within resource's bounding sphere (size * 2 for easier hovering)
+                if (distToResource <= node.size * 2.0f && projDist < closestResourceDist) {
+                    closestResourceDist = projDist;
+                    hoveredResource = &node;
+                }
+            }
+            
+            if (hoveredResource) {
+                // Format resource hover info
+                hoverInfo = hoveredResource->getResourceName();
+                hasHoverInfo = true;
+            }
+        } else {
+            // Format NPC hover info
+            char buffer[64];
+            snprintf(buffer, sizeof(buffer), "%s - Health: %d/%d", 
+                     hoveredNPC->getTypeName(), hoveredNPC->health, hoveredNPC->maxHealth);
+            hoverInfo = buffer;
+            hasHoverInfo = true;
+        }
         
         // Render all loaded terrain chunks
         chunkManager.renderChunks(texProgram, s_texColor);
@@ -2622,10 +2727,6 @@ int main(int argc, char* argv[]) {
         // Always clear debug text buffer and render active overlays
         bgfx::dbgTextClear();
         
-        // Get current window size for positioning
-        int currentWidth, currentHeight;
-        SDL_GetWindowSize(window, &currentWidth, &currentHeight);
-        
         // Calculate text grid size (BGFX debug text uses character grid)
         int textCols = currentWidth / 8;  // Approximate character width
         int textRows = currentHeight / 16; // Approximate character height
@@ -2649,6 +2750,14 @@ int main(int argc, char* argv[]) {
         
         // Render player health bar (always visible)
         player.renderHealthBar();
+        
+        // Render hover info if available (right below health bar)
+        if (hasHoverInfo && !hoverInfo.empty()) {
+            // Position below health bar (health bar is at row 1)
+            int centerX = 35 - (hoverInfo.length() / 2); // Center the text
+            if (centerX < 0) centerX = 0;
+            bgfx::dbgTextPrintf(centerX, 2, 0x0f, "%s", hoverInfo.c_str());
+        }
         
         bgfx::frame();
     }

@@ -19,8 +19,8 @@
 
 ## BUGS
 
-- all NPCs same color, not applying correctly the different colors
 - NPC color change in combat not working
+- NPC walk into water
 
 ## CHANGELOG
 
