@@ -1,7 +1,7 @@
 ##  TODO
 
 - refactor
-- proper UI
+- improve UI
 - trees
 - crafting
 - camera follow player
@@ -29,6 +29,7 @@
 - combat system
 - basic skills with text UI
 - some refactoring
+- graphical HUD
 
 # 0.1 - 22.05.2025
 

@@ -72,14 +72,14 @@ void PlayerInventory::renderOverlay(UIRenderer& uiRenderer) const {
     // Position inventory in top left corner with custom UI
     float panelX = 10.0f;
     float panelY = 10.0f;
-    float panelWidth = 180.0f;
-    float panelHeight = 140.0f;
+    float panelWidth = 190.0f;
+    float panelHeight = 180.0f;
     
     // Render inventory panel background (black with transparency)
     uiRenderer.panel(panelX, panelY, panelWidth, panelHeight, 0xAA000000);
     
     // Render inventory header
-    uiRenderer.text(panelX + 10, panelY + 20, "=== INVENTORY ===", UIColors::TEXT_HIGHLIGHT);
+    uiRenderer.text(panelX + 10, panelY + 20, "INVENTORY", UIColors::TEXT_HIGHLIGHT);
     
     // Render resource counts with proper spacing
     char inventoryText[64];
@@ -93,5 +93,5 @@ void PlayerInventory::renderOverlay(UIRenderer& uiRenderer) const {
     uiRenderer.text(panelX + 10, panelY + 100, inventoryText, UIColors::TEXT_NORMAL);
     
     // Render footer instruction
-    uiRenderer.text(panelX + 10, panelY + 125, "Press I to close", UIColors::GRAY);
+    uiRenderer.text(panelX + 10, panelY + 140, "Press I to close", UIColors::GRAY);
 }

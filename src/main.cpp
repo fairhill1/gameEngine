@@ -2497,7 +2497,7 @@ int main(int argc, char* argv[]) {
         
         // Render hover info if available (centered at top)
         if (hasHoverInfo && !hoverInfo.empty()) {
-            uiRenderer.textCentered(currentWidth / 2, 30, hoverInfo.c_str(), UIColors::TEXT_HIGHLIGHT);
+            uiRenderer.textCentered(currentWidth / 2, 50, hoverInfo.c_str(), UIColors::TEXT_HIGHLIGHT);
         }
         
         // End UI rendering

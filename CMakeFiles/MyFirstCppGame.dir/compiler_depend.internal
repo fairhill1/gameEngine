@@ -4368,6 +4368,7 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o
  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/npcs.h
  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.h
  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/skills.h
+ /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ui.h
 
 CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o
  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.cpp
@@ -5189,6 +5190,7 @@ CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o
  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bx/include/bx/typetraits.h
  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bx/include/bx/uint32_t.h
  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.h
+ /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ui.h
 
 CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o
  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/skills.cpp

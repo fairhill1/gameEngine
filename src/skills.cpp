@@ -47,18 +47,18 @@ void PlayerSkills::renderOverlay(UIRenderer& uiRenderer, float screenHeight) con
     
     // Position skills in bottom left corner with custom UI
     float panelX = 10.0f;
-    float panelY = screenHeight - 200.0f; // 200px from bottom
-    float panelWidth = 200.0f;
-    float panelHeight = 180.0f;
+    float panelY = screenHeight - 280.0f; // 280px from bottom
+    float panelWidth = 230.0f;
+    float panelHeight = 270.0f;
     
     // Render skills panel background (black with transparency)
     uiRenderer.panel(panelX, panelY, panelWidth, panelHeight, 0xAA000000);
     
     // Render skills header
-    uiRenderer.text(panelX + 10, panelY + 20, "=== SKILLS ===", UIColors::TEXT_HIGHLIGHT);
+    uiRenderer.text(panelX + 10, panelY + 15, "SKILLS", UIColors::TEXT_HIGHLIGHT);
     
     // Render each skill with proper spacing
-    float lineY = panelY + 50;
+    float lineY = panelY + 40;
     for (const auto& [type, skill] : skills) {
         // Skill name and level
         char skillText[64];
@@ -69,13 +69,13 @@ void PlayerSkills::renderOverlay(UIRenderer& uiRenderer, float screenHeight) con
         int xpPercent = (int)((skill.experience / skill.experienceToNextLevel) * 100.0f);
         snprintf(skillText, sizeof(skillText), "  XP: %d/%d (%d%%)", 
                 (int)skill.experience, (int)skill.experienceToNextLevel, xpPercent);
-        uiRenderer.text(panelX + 10, lineY + 25, skillText, UIColors::GRAY);
+        uiRenderer.text(panelX + 10, lineY + 30, skillText, UIColors::GRAY);
         
-        lineY += 45; // Space between skills
+        lineY += 60; // More space between skills
     }
     
     // Render footer instruction
-    uiRenderer.text(panelX + 10, panelY + panelHeight - 25, "Press C to close", UIColors::GRAY);
+    uiRenderer.text(panelX + 10, panelY + panelHeight - 30, "Press C to close", UIColors::GRAY);
 }
 
 Skill& PlayerSkills::getSkill(SkillType type) {

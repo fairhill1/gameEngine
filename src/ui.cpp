@@ -236,7 +236,7 @@ bool UIRenderer::init(const char* fontPath) {
     UIVertex::init();
     
     // Initialize font atlas with larger size for better readability
-    if (!m_fontAtlas.init(fontPath, 24.0f)) {
+    if (!m_fontAtlas.init(fontPath, 23.0f)) {
         printf("UI: Failed to initialize font atlas\n");
         return false;
     }

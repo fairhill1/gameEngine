@@ -4362,7 +4362,8 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
   deps/bx/include/bx/uint32_t.h \
   src/npcs.h \
   src/player.h \
-  src/skills.h
+  src/skills.h \
+  src/ui.h
 
 CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o: src/resources.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \
@@ -5182,7 +5183,8 @@ CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o: src/resources.cpp \
   deps/bx/include/bx/simd_t.h \
   deps/bx/include/bx/typetraits.h \
   deps/bx/include/bx/uint32_t.h \
-  src/resources.h
+  src/resources.h \
+  src/ui.h
 
 CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o: src/skills.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \
