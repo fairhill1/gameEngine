@@ -740,6 +740,10 @@ struct ResourceNode {
     }
 };
 
+// Forward declarations
+struct Player;
+struct NPC;
+
 // NPC System
 enum class NPCType {
     WANDERER,
@@ -750,7 +754,10 @@ enum class NPCType {
 enum class NPCState {
     WANDERING,
     IDLE,
-    MOVING_TO_TARGET
+    MOVING_TO_TARGET,
+    APPROACHING_ENEMY,  // Moving toward combat target
+    IN_COMBAT,          // Actively fighting
+    FLEEING             // Running away (for villagers)
 };
 
 struct NPC {
@@ -771,10 +778,24 @@ struct NPC {
     bool isHostile;
     float lastDamageTime;
     
+    // Combat properties
+    Player* combatTarget;    // Who we're fighting
+    float lastAttackTime;
+    float attackCooldown;    // Time between attacks
+    float attackRange;       // How close to attack
+    float aggroRange;        // Detection range
+    float combatRange;       // Preferred fighting distance
+    int attackDamage;
+    float hitChance;         // 0.0 to 1.0
+    float dodgeChance;       // 0.0 to 1.0
+    float hitFlashTimer;     // Red flash when hit
+    
     NPC(float x, float y, float z, NPCType npcType) 
         : position({x, y, z}), velocity({0.0f, 0.0f, 0.0f}), targetPosition({x, y, z}),
           type(npcType), state(NPCState::IDLE), speed(1.5f), size(0.8f), 
-          stateTimer(0.0f), maxStateTime(3.0f), isActive(true), isHostile(false), lastDamageTime(0.0f) {
+          stateTimer(0.0f), maxStateTime(3.0f), isActive(true), isHostile(false), lastDamageTime(0.0f),
+          combatTarget(nullptr), lastAttackTime(0.0f), attackCooldown(1.5f), attackRange(1.5f), 
+          aggroRange(8.0f), combatRange(2.5f), attackDamage(10), hitChance(0.7f), dodgeChance(0.2f), hitFlashTimer(0.0f) {
         
         // Set NPC-specific properties
         switch (type) {
@@ -783,18 +804,33 @@ struct NPC {
                 baseColor = 0xff00AA00; // Green
                 maxHealth = 60;         // Medium health
                 maxStateTime = 2.0f + (bx::sin(x * 0.1f) * 0.5f + 0.5f) * 3.0f; // 2-5 seconds
+                // Combat stats
+                attackDamage = 8;
+                hitChance = 0.65f;
+                dodgeChance = 0.25f;
+                attackCooldown = 1.8f;
                 break;
             case NPCType::VILLAGER:
                 speed = 1.0f;
                 baseColor = 0xff0066FF; // Blue  
                 maxHealth = 40;         // Low health (peaceful)
                 maxStateTime = 4.0f + (bx::cos(z * 0.1f) * 0.5f + 0.5f) * 4.0f; // 4-8 seconds
+                // Combat stats (villagers flee instead of fight)
+                attackDamage = 0;
+                hitChance = 0.0f;
+                dodgeChance = 0.4f;  // Good at dodging while fleeing
+                aggroRange = 12.0f;  // Detect threats from farther away
                 break;
             case NPCType::MERCHANT:
                 speed = 1.5f;
                 baseColor = 0xffFFAA00; // Orange
                 maxHealth = 80;         // High health (well-armed traders)
                 maxStateTime = 3.0f + (bx::sin((x + z) * 0.1f) * 0.5f + 0.5f) * 2.0f; // 3-5 seconds
+                // Combat stats (better equipped)
+                attackDamage = 12;
+                hitChance = 0.75f;
+                dodgeChance = 0.15f;
+                attackCooldown = 1.5f;
                 break;
         }
         
@@ -803,75 +839,8 @@ struct NPC {
         updateHealthColor(); // Apply initial color
     }
     
-    void update(float deltaTime, float terrainHeight) {
-        if (!isActive) return;
-        
-        stateTimer += deltaTime;
-        
-        switch (state) {
-            case NPCState::IDLE:
-                if (stateTimer >= maxStateTime) {
-                    // Pick a new random target within reasonable distance
-                    float angle = (bx::sin(position.x * 0.7f + stateTimer) * 0.5f + 0.5f) * 2.0f * bx::kPi;
-                    float distance = 5.0f + (bx::cos(position.z * 0.8f + stateTimer) * 0.5f + 0.5f) * 10.0f; // 5-15 units
-                    
-                    targetPosition.x = position.x + bx::cos(angle) * distance;
-                    targetPosition.z = position.z + bx::sin(angle) * distance;
-                    
-                    state = NPCState::MOVING_TO_TARGET;
-                    stateTimer = 0.0f;
-                }
-                break;
-                
-            case NPCState::MOVING_TO_TARGET: {
-                // Move towards target
-                float dx = targetPosition.x - position.x;
-                float dz = targetPosition.z - position.z;
-                float distance = bx::sqrt(dx * dx + dz * dz);
-                
-                if (distance < 1.0f) {
-                    // Reached target, go idle
-                    state = NPCState::IDLE;
-                    stateTimer = 0.0f;
-                    velocity = {0.0f, 0.0f, 0.0f};
-                } else {
-                    // Move towards target
-                    velocity.x = (dx / distance) * speed;
-                    velocity.z = (dz / distance) * speed;
-                    
-                    position.x += velocity.x * deltaTime;
-                    position.z += velocity.z * deltaTime;
-                    
-                    // Update Y position to follow terrain
-                    position.y = terrainHeight + size - 5.0f;
-                }
-                
-                // Timeout check - if moving too long, go idle
-                if (stateTimer > 15.0f) {
-                    state = NPCState::IDLE;
-                    stateTimer = 0.0f;
-                    velocity = {0.0f, 0.0f, 0.0f};
-                }
-                break;
-            }
-                
-            case NPCState::WANDERING:
-                // Continuous random walk
-                if (stateTimer >= 1.0f) {
-                    float angle = (bx::sin(position.x * 1.1f + stateTimer) + bx::cos(position.z * 0.9f + stateTimer)) * 0.5f;
-                    velocity.x = bx::cos(angle) * speed * 0.5f;
-                    velocity.z = bx::sin(angle) * speed * 0.5f;
-                    stateTimer = 0.0f;
-                }
-                
-                position.x += velocity.x * deltaTime;
-                position.z += velocity.z * deltaTime;
-                
-                // Update Y position to follow terrain
-                position.y = terrainHeight + size - 5.0f;
-                break;
-        }
-    }
+    // Forward declare update method - implemented after Player struct
+    void update(float deltaTime, float terrainHeight, Player* player, float currentTime);
     
     const char* getTypeName() const {
         switch (type) {
@@ -885,6 +854,7 @@ struct NPC {
     void takeDamage(int damage, float currentTime) {
         health = bx::max(0, health - damage);
         lastDamageTime = currentTime;
+        hitFlashTimer = 0.2f; // Flash red for 0.2 seconds
         updateHealthColor();
         
         // Make NPC hostile when attacked (except villagers who flee)
@@ -903,6 +873,17 @@ struct NPC {
     void updateHealthColor() {
         if (health <= 0) {
             color = 0xff404040; // Dark gray when dead
+            return;
+        }
+        
+        // Flash red when hit
+        if (hitFlashTimer > 0) {
+            // Interpolate between red and base color based on timer
+            float flashIntensity = hitFlashTimer / 0.2f; // 0.2 is max flash duration
+            uint32_t r = 255;
+            uint32_t g = ((baseColor >> 8) & 0xFF) * (1.0f - flashIntensity);
+            uint32_t b = (baseColor & 0xFF) * (1.0f - flashIntensity);
+            color = 0xff000000 | (r << 16) | (g << 8) | b;
             return;
         }
         
@@ -1448,9 +1429,21 @@ struct Player {
     int maxHealth;
     float lastDamageTime;
     
+    // Combat properties
+    NPC* combatTarget;       // Current NPC we're fighting
+    float lastAttackTime;
+    float attackCooldown;    // Time between attacks
+    int attackDamage;
+    float hitChance;         // 0.0 to 1.0
+    float dodgeChance;       // 0.0 to 1.0
+    bool inCombat;
+    float hitFlashTimer;     // Red flash when hit
+    
     Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
                hasTarget(false), isSprinting(false), moveSpeed(0.05f), sprintSpeed(0.15f), size(0.3f),
-               health(100), maxHealth(100), lastDamageTime(0.0f) {}
+               health(100), maxHealth(100), lastDamageTime(0.0f),
+               combatTarget(nullptr), lastAttackTime(0.0f), attackCooldown(1.2f),
+               attackDamage(15), hitChance(0.8f), dodgeChance(0.3f), inCombat(false), hitFlashTimer(0.0f) {}
     
     void setTarget(float x, float z, const ChunkManager& chunkManager, bool sprint = false) {
         targetPosition.x = x;
@@ -1460,8 +1453,67 @@ struct Player {
         isSprinting = sprint;
     }
     
-    void update(const ChunkManager& chunkManager) {
-        if (hasTarget) {
+    void update(const ChunkManager& chunkManager, float currentTime, float deltaTime) {
+        // Update hit flash timer
+        if (hitFlashTimer > 0) {
+            hitFlashTimer -= deltaTime;
+            if (hitFlashTimer < 0) hitFlashTimer = 0;
+        }
+        
+        // Handle combat if we have a target
+        if (combatTarget && combatTarget->isActive) {
+            float dx = combatTarget->position.x - position.x;
+            float dz = combatTarget->position.z - position.z;
+            float distance = bx::sqrt(dx * dx + dz * dz);
+            
+            // Check if we're in combat range
+            if (distance <= 3.0f) {
+                inCombat = true;
+                hasTarget = false; // Stop normal movement
+                
+                // Maintain combat distance
+                if (distance > 2.5f) {
+                    // Move closer
+                    position.x += (dx / distance) * moveSpeed * 2.0f;
+                    position.z += (dz / distance) * moveSpeed * 2.0f;
+                } else if (distance < 1.5f) {
+                    // Back up
+                    position.x -= (dx / distance) * moveSpeed;
+                    position.z -= (dz / distance) * moveSpeed;
+                }
+                
+                // Attack if cooldown is ready
+                if (currentTime - lastAttackTime >= attackCooldown) {
+                    // RNG for hit/miss
+                    float hitRoll = (rand() % 100) / 100.0f;
+                    float dodgeRoll = (rand() % 100) / 100.0f;
+                    
+                    if (hitRoll < hitChance && dodgeRoll > combatTarget->dodgeChance) {
+                        // Hit!
+                        combatTarget->takeDamage(attackDamage, currentTime);
+                        std::cout << "Player hits " << combatTarget->getTypeName() << " for " << attackDamage << " damage!" << std::endl;
+                    } else {
+                        std::cout << "Player misses!" << std::endl;
+                    }
+                    
+                    lastAttackTime = currentTime;
+                }
+            } else if (distance > 15.0f || !combatTarget->isActive) {
+                // Too far or target dead, exit combat
+                combatTarget = nullptr;
+                inCombat = false;
+            } else {
+                // Move toward combat target
+                hasTarget = true;
+                targetPosition = combatTarget->position;
+                isSprinting = true; // Sprint to combat
+            }
+        } else {
+            inCombat = false;
+        }
+        
+        // Normal movement when not in active combat
+        if (hasTarget && !inCombat) {
             bx::Vec3 direction = {
                 targetPosition.x - position.x,
                 0.0f,
@@ -1484,12 +1536,16 @@ struct Player {
                 position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
             }
         }
+        
+        // Always update Y position
+        position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f;
     }
     
     void takeDamage(int damage, float currentTime) {
         if (canTakeDamage(currentTime)) {
             health = bx::max(0, health - damage);
             lastDamageTime = currentTime;
+            hitFlashTimer = 0.2f; // Flash red for 0.2 seconds
             std::cout << "Player took " << damage << " damage! Health: " << health << "/" << maxHealth << std::endl;
             
             if (health <= 0) {
@@ -1532,6 +1588,214 @@ struct Player {
         bgfx::dbgTextPrintf(centerX, topY, healthColor, "Health: %d/%d", health, maxHealth);
     }
 };
+
+// NPC update method implementation (needs Player to be fully defined)
+void NPC::update(float deltaTime, float terrainHeight, Player* player, float currentTime) {
+    if (!isActive) return;
+    
+    stateTimer += deltaTime;
+    
+    // Update hit flash timer
+    if (hitFlashTimer > 0) {
+        hitFlashTimer -= deltaTime;
+        if (hitFlashTimer < 0) hitFlashTimer = 0;
+    }
+    
+    // Check for combat initiation if hostile or if player is our combat target
+    if (player && (isHostile || combatTarget == player)) {
+        float dx = player->position.x - position.x;
+        float dz = player->position.z - position.z;
+        float distToPlayer = bx::sqrt(dx * dx + dz * dz);
+        
+        // Check if we should enter combat
+        if (distToPlayer <= aggroRange && state != NPCState::IN_COMBAT && state != NPCState::FLEEING) {
+            if (type == NPCType::VILLAGER) {
+                // Villagers flee instead of fight
+                state = NPCState::FLEEING;
+                // Set flee target opposite of player
+                targetPosition.x = position.x - (dx / distToPlayer) * 15.0f;
+                targetPosition.z = position.z - (dz / distToPlayer) * 15.0f;
+            } else if (isHostile || combatTarget == player) {
+                // Enter combat mode
+                state = NPCState::APPROACHING_ENEMY;
+                combatTarget = player;
+            }
+            stateTimer = 0.0f;
+        }
+    }
+    
+    switch (state) {
+        case NPCState::IDLE:
+            if (stateTimer >= maxStateTime) {
+                // Pick a new random target within reasonable distance
+                float angle = (bx::sin(position.x * 0.7f + stateTimer) * 0.5f + 0.5f) * 2.0f * bx::kPi;
+                float distance = 5.0f + (bx::cos(position.z * 0.8f + stateTimer) * 0.5f + 0.5f) * 10.0f; // 5-15 units
+                
+                targetPosition.x = position.x + bx::cos(angle) * distance;
+                targetPosition.z = position.z + bx::sin(angle) * distance;
+                
+                state = NPCState::MOVING_TO_TARGET;
+                stateTimer = 0.0f;
+            }
+            break;
+            
+        case NPCState::MOVING_TO_TARGET: {
+            // Move towards target
+            float dx = targetPosition.x - position.x;
+            float dz = targetPosition.z - position.z;
+            float distance = bx::sqrt(dx * dx + dz * dz);
+            
+            if (distance < 1.0f) {
+                // Reached target, go idle
+                state = NPCState::IDLE;
+                stateTimer = 0.0f;
+                velocity = {0.0f, 0.0f, 0.0f};
+            } else {
+                // Move towards target
+                velocity.x = (dx / distance) * speed;
+                velocity.z = (dz / distance) * speed;
+                
+                position.x += velocity.x * deltaTime;
+                position.z += velocity.z * deltaTime;
+                
+                // Update Y position to follow terrain
+                position.y = terrainHeight + size - 5.0f;
+            }
+            
+            // Timeout check - if moving too long, go idle
+            if (stateTimer > 15.0f) {
+                state = NPCState::IDLE;
+                stateTimer = 0.0f;
+                velocity = {0.0f, 0.0f, 0.0f};
+            }
+            break;
+        }
+        
+        case NPCState::APPROACHING_ENEMY: {
+            if (combatTarget) {
+                float dx = combatTarget->position.x - position.x;
+                float dz = combatTarget->position.z - position.z;
+                float distance = bx::sqrt(dx * dx + dz * dz);
+                
+                if (distance <= combatRange) {
+                    // Close enough, switch to combat
+                    state = NPCState::IN_COMBAT;
+                    velocity = {0.0f, 0.0f, 0.0f};
+                } else {
+                    // Move toward target
+                    velocity.x = (dx / distance) * speed * 1.5f; // Move faster when approaching combat
+                    velocity.z = (dz / distance) * speed * 1.5f;
+                    
+                    position.x += velocity.x * deltaTime;
+                    position.z += velocity.z * deltaTime;
+                    position.y = terrainHeight + size - 5.0f;
+                }
+                
+                // Give up if too far or taking too long
+                if (distance > aggroRange * 1.5f || stateTimer > 10.0f) {
+                    state = NPCState::IDLE;
+                    combatTarget = nullptr;
+                    isHostile = false;
+                    stateTimer = 0.0f;
+                }
+            }
+            break;
+        }
+        
+        case NPCState::IN_COMBAT: {
+            if (combatTarget) {
+                float dx = combatTarget->position.x - position.x;
+                float dz = combatTarget->position.z - position.z;
+                float distance = bx::sqrt(dx * dx + dz * dz);
+                
+                // Maintain combat distance
+                if (distance > combatRange + 0.5f) {
+                    // Too far, move closer
+                    velocity.x = (dx / distance) * speed;
+                    velocity.z = (dz / distance) * speed;
+                } else if (distance < combatRange - 0.5f) {
+                    // Too close, back up
+                    velocity.x = -(dx / distance) * speed * 0.5f;
+                    velocity.z = -(dz / distance) * speed * 0.5f;
+                } else {
+                    // Good distance, circle strafe
+                    float strafeAngle = currentTime * 0.5f;
+                    velocity.x = -dz / distance * speed * 0.3f * bx::sin(strafeAngle);
+                    velocity.z = dx / distance * speed * 0.3f * bx::sin(strafeAngle);
+                }
+                
+                position.x += velocity.x * deltaTime;
+                position.z += velocity.z * deltaTime;
+                position.y = terrainHeight + size - 5.0f;
+                
+                // Attack if cooldown is ready
+                if (currentTime - lastAttackTime >= attackCooldown) {
+                    // RNG for hit/miss
+                    float hitRoll = (rand() % 100) / 100.0f;
+                    float dodgeRoll = (rand() % 100) / 100.0f;
+                    
+                    if (hitRoll < hitChance && dodgeRoll > combatTarget->dodgeChance) {
+                        // Hit!
+                        combatTarget->takeDamage(attackDamage, currentTime);
+                        std::cout << getTypeName() << " hits player for " << attackDamage << " damage!" << std::endl;
+                    } else {
+                        std::cout << getTypeName() << " misses!" << std::endl;
+                    }
+                    
+                    lastAttackTime = currentTime;
+                }
+                
+                // Exit combat if target is too far or dead
+                if (distance > aggroRange * 1.5f || combatTarget->health <= 0) {
+                    state = NPCState::IDLE;
+                    combatTarget = nullptr;
+                    isHostile = false;
+                    stateTimer = 0.0f;
+                }
+            }
+            break;
+        }
+        
+        case NPCState::FLEEING: {
+            // Run away!
+            float dx = targetPosition.x - position.x;
+            float dz = targetPosition.z - position.z;
+            float distance = bx::sqrt(dx * dx + dz * dz);
+            
+            if (distance < 2.0f || stateTimer > 8.0f) {
+                // Reached safe distance or timeout
+                state = NPCState::IDLE;
+                stateTimer = 0.0f;
+                velocity = {0.0f, 0.0f, 0.0f};
+            } else {
+                // Sprint away
+                velocity.x = (dx / distance) * speed * 2.0f;
+                velocity.z = (dz / distance) * speed * 2.0f;
+                
+                position.x += velocity.x * deltaTime;
+                position.z += velocity.z * deltaTime;
+                position.y = terrainHeight + size - 5.0f;
+            }
+            break;
+        }
+            
+        case NPCState::WANDERING:
+            // Continuous random walk
+            if (stateTimer >= 1.0f) {
+                float angle = (bx::sin(position.x * 1.1f + stateTimer) + bx::cos(position.z * 0.9f + stateTimer)) * 0.5f;
+                velocity.x = bx::cos(angle) * speed * 0.5f;
+                velocity.z = bx::sin(angle) * speed * 0.5f;
+                stateTimer = 0.0f;
+            }
+            
+            position.x += velocity.x * deltaTime;
+            position.z += velocity.z * deltaTime;
+            
+            // Update Y position to follow terrain
+            position.y = terrainHeight + size - 5.0f;
+            break;
+    }
+}
 
 // Player inventory system
 struct PlayerInventory {
@@ -2199,16 +2463,17 @@ int main(int argc, char* argv[]) {
     std::cout << "Q/E  - Move up/down" << std::endl;
     std::cout << "1    - Jump to bird's eye view of player" << std::endl;
     std::cout << "Left click and drag - Rotate camera" << std::endl;
-    std::cout << "Right click - Move player to terrain location" << std::endl;
-    std::cout << "Double right click - Sprint to terrain location" << std::endl;
+    std::cout << "Right click on NPC - Initiate combat (Kenshi-style)" << std::endl;
+    std::cout << "Right click on terrain - Move player to location" << std::endl;
+    std::cout << "Double right click - Sprint to location" << std::endl;
     std::cout << "SPACE - Mine nearby resource nodes" << std::endl;
     std::cout << "I    - Toggle inventory overlay" << std::endl;
     std::cout << "O    - Toggle debug overlay" << std::endl;
     std::cout << "H    - Test damage (health system)" << std::endl;
     std::cout << "J    - Test healing (health system)" << std::endl;
-    std::cout << "K    - Test attack nearby NPCs" << std::endl;
     std::cout << "ESC  - Exit" << std::endl;
     std::cout << "===================" << std::endl;
+    std::cout << "Combat: NPCs will approach when you get close. Combat is automatic with RNG!" << std::endl;
     
     // Main game loop variables
     bool quit = false;
@@ -2328,29 +2593,6 @@ int main(int argc, char* argv[]) {
                     // Test healing (J key for heal)
                     player.heal(25);
                     std::cout << "J key pressed - test healing applied!" << std::endl;
-                }
-                else if (event.key.key == SDLK_K) {
-                    // Test NPC damage (K key for attacking nearby NPCs)
-                    const float attackRange = 3.0f;
-                    bool attackedSomeone = false;
-                    
-                    for (auto& npc : npcs) {
-                        if (!npc.isActive) continue;
-                        
-                        float dx = player.position.x - npc.position.x;
-                        float dz = player.position.z - npc.position.z;
-                        float distance = bx::sqrt(dx * dx + dz * dz);
-                        
-                        if (distance <= attackRange && npc.canTakeDamage(time)) {
-                            npc.takeDamage(25, time);
-                            attackedSomeone = true;
-                            break; // Attack only one NPC
-                        }
-                    }
-                    
-                    if (!attackedSomeone) {
-                        std::cout << "K key pressed - No NPCs in attack range (" << attackRange << " units)" << std::endl;
-                    }
                 }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
@@ -2476,22 +2718,69 @@ int main(int argc, char* argv[]) {
         int currentWidth, currentHeight;
         SDL_GetWindowSize(window, &currentWidth, &currentHeight);
         
-        // Handle terrain picking from right-click
+        // Handle right-click picking (NPC first, then terrain)
         if (hasPendingClick) {
-            
             std::cout << "Right-click detected! Window size: " << currentWidth << "x" << currentHeight << std::endl;
             Ray ray = createRayFromMouse(pendingMouseX, pendingMouseY, currentWidth, currentHeight, view, proj);
-            bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
-            if (rayTerrainIntersection(ray, chunkManager, hitPoint)) {
-                player.setTarget(hitPoint.x, hitPoint.z, chunkManager, shouldSprint);
-                if (shouldSprint) {
-                    std::cout << "Player sprinting to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
-                } else {
-                    std::cout << "Player moving to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+            
+            // First check if we clicked on an NPC
+            float closestNPCDist = FLT_MAX;
+            NPC* clickedNPC = nullptr;
+            
+            for (auto& npc : npcs) {
+                if (!npc.isActive) continue;
+                
+                // Ray-sphere intersection test
+                bx::Vec3 toNPC = {
+                    npc.position.x - ray.origin.x,
+                    npc.position.y - ray.origin.y,
+                    npc.position.z - ray.origin.z
+                };
+                
+                float projDist = bx::dot(toNPC, ray.direction);
+                if (projDist < 0) continue; // Behind camera
+                
+                bx::Vec3 closestPoint = {
+                    ray.origin.x + ray.direction.x * projDist,
+                    ray.origin.y + ray.direction.y * projDist,
+                    ray.origin.z + ray.direction.z * projDist
+                };
+                
+                float dx = closestPoint.x - npc.position.x;
+                float dy = closestPoint.y - npc.position.y;
+                float dz = closestPoint.z - npc.position.z;
+                float distToNPC = bx::sqrt(dx*dx + dy*dy + dz*dz);
+                
+                // Check if within NPC's bounding sphere
+                if (distToNPC <= npc.size * 1.5f && projDist < closestNPCDist) {
+                    closestNPCDist = projDist;
+                    clickedNPC = &npc;
                 }
-            } else {
-                std::cout << "No terrain intersection found!" << std::endl;
             }
+            
+            if (clickedNPC) {
+                // Clicked on an NPC - initiate combat
+                player.combatTarget = clickedNPC;
+                clickedNPC->combatTarget = &player;
+                clickedNPC->isHostile = true;
+                std::cout << "Initiating combat with " << clickedNPC->getTypeName() << "!" << std::endl;
+            } else {
+                // No NPC clicked, check terrain
+                bx::Vec3 hitPoint = {0.0f, 0.0f, 0.0f};
+                if (rayTerrainIntersection(ray, chunkManager, hitPoint)) {
+                    // Clear combat target when moving to terrain
+                    player.combatTarget = nullptr;
+                    player.setTarget(hitPoint.x, hitPoint.z, chunkManager, shouldSprint);
+                    if (shouldSprint) {
+                        std::cout << "Player sprinting to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+                    } else {
+                        std::cout << "Player moving to: (" << hitPoint.x << ", " << hitPoint.z << ")" << std::endl;
+                    }
+                } else {
+                    std::cout << "No terrain intersection found!" << std::endl;
+                }
+            }
+            
             hasPendingClick = false;
             shouldSprint = false; // Reset sprint flag
         }
@@ -2500,7 +2789,7 @@ int main(int argc, char* argv[]) {
         debugOverlay.update();
         
         // Update player and chunks
-        player.update(chunkManager);
+        player.update(chunkManager, time, deltaTime);
         chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
         
         // Check for hover over objects
@@ -2616,7 +2905,35 @@ int main(int argc, char* argv[]) {
         objState &= ~BGFX_STATE_CULL_MASK;
         bgfx::setState(objState);
         
-        render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, playerMatrix);
+        // Create player vertices with hit flash
+        if (player.hitFlashTimer > 0) {
+            PosColorVertex playerVertices[8];
+            // Calculate flash intensity
+            float flashIntensity = player.hitFlashTimer / 0.2f;
+            uint32_t baseColor = 0xffffffff; // White player
+            uint32_t r = 255;
+            uint32_t g = 255 * (1.0f - flashIntensity * 0.5f);
+            uint32_t b = 255 * (1.0f - flashIntensity * 0.8f);
+            uint32_t flashColor = 0xff000000 | (b << 16) | (g << 8) | r; // ABGR format
+            
+            for (int i = 0; i < 8; i++) {
+                playerVertices[i] = cubeVertices[i];
+                playerVertices[i].abgr = flashColor;
+            }
+            
+            // Create transient vertex buffer
+            bgfx::TransientVertexBuffer tvb;
+            bgfx::allocTransientVertexBuffer(&tvb, 8, layout);
+            bx::memCopy(tvb.data, playerVertices, sizeof(playerVertices));
+            
+            bgfx::setVertexBuffer(0, &tvb);
+            bgfx::setIndexBuffer(ibh);
+            bgfx::setState(objState);
+            bgfx::setTransform(playerMatrix);
+            bgfx::submit(0, program);
+        } else {
+            render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, playerMatrix);
+        }
         
         // Render resource nodes
         for (const auto& node : resourceNodes) {
@@ -2652,7 +2969,8 @@ int main(int argc, char* argv[]) {
             
             // Update NPC AI
             float npcTerrainHeight = chunkManager.getHeightAt(npc.position.x, npc.position.z);
-            npc.update(deltaTime, npcTerrainHeight);
+            npc.update(deltaTime, npcTerrainHeight, &player, time);
+            npc.updateHealthColor(); // Ensure color is updated for flash effect
             
             // Render NPC
             float npcMatrix[16], npcTranslation[16], npcScale[16];
@@ -2660,23 +2978,44 @@ int main(int argc, char* argv[]) {
             bx::mtxTranslate(npcTranslation, npc.position.x, npc.position.y, npc.position.z);
             bx::mtxMul(npcMatrix, npcScale, npcTranslation);
             
-            // Use appropriate vertex buffer based on NPC type
-            bgfx::VertexBufferHandle npcVbh;
+            // Create dynamic vertex buffer with current color
+            PosColorVertex npcVertices[8];
+            
+            // Copy base vertex data from appropriate type
+            const PosColorVertex* baseVertices = nullptr;
             switch (npc.type) {
                 case NPCType::WANDERER:
-                    npcVbh = wandererVbh;
+                    baseVertices = wandererCubeVertices;
                     break;
                 case NPCType::VILLAGER:
-                    npcVbh = villagerVbh;
+                    baseVertices = villagerCubeVertices;
                     break;
                 case NPCType::MERCHANT:
-                    npcVbh = merchantVbh;
+                    baseVertices = merchantCubeVertices;
                     break;
                 default:
-                    npcVbh = wandererVbh; // Fallback
+                    baseVertices = wandererCubeVertices;
                     break;
             }
-            render_object_at_position(npcVbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, npcMatrix);
+            
+            // Apply hit flash color or health-based color
+            for (int i = 0; i < 8; i++) {
+                npcVertices[i] = baseVertices[i];
+                // Override color with dynamic color (includes hit flash)
+                npcVertices[i].abgr = npc.color;
+            }
+            
+            // Create transient vertex buffer with current color
+            bgfx::TransientVertexBuffer tvb;
+            bgfx::allocTransientVertexBuffer(&tvb, 8, layout);
+            bx::memCopy(tvb.data, npcVertices, sizeof(npcVertices));
+            
+            // Set vertex buffer and render
+            bgfx::setVertexBuffer(0, &tvb);
+            bgfx::setIndexBuffer(ibh);
+            bgfx::setState(objState);
+            bgfx::setTransform(npcMatrix);
+            bgfx::submit(0, program);
         }
         
         // Set state for test cubes (with culling disabled for spinning cubes)
