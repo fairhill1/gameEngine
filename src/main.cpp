@@ -278,6 +278,10 @@ struct TerrainVertex {
     float u, v;
 };
 
+// Global ocean/water constants
+static constexpr float SEA_LEVEL = 1.0f;  // Y coordinate for water surface
+static constexpr float OCEAN_DEPTH_SCALE = 0.3f;  // How much to flatten terrain underwater
+
 class TerrainChunk {
 public:
     static constexpr int CHUNK_SIZE = 64;
@@ -292,32 +296,53 @@ public:
     bgfx::IndexBufferHandle ibh;
     bgfx::TextureHandle texture;  // Biome-specific texture
     
+    // Water plane data
+    bool hasWater;  // Does this chunk need water rendering?
+    std::vector<TerrainVertex> waterVertices;
+    std::vector<uint16_t> waterIndices;
+    bgfx::VertexBufferHandle waterVbh;
+    bgfx::IndexBufferHandle waterIbh;
+    
     TerrainChunk(int cx, int cz, BiomeType biomeType) 
-        : chunkX(cx), chunkZ(cz), biome(biomeType) {
+        : chunkX(cx), chunkZ(cz), biome(biomeType), hasWater(false) {
         vbh = BGFX_INVALID_HANDLE;
         ibh = BGFX_INVALID_HANDLE;
         texture = BGFX_INVALID_HANDLE;
+        waterVbh = BGFX_INVALID_HANDLE;
+        waterIbh = BGFX_INVALID_HANDLE;
     }
     
     ~TerrainChunk() {
         if (bgfx::isValid(vbh)) bgfx::destroy(vbh);
         if (bgfx::isValid(ibh)) bgfx::destroy(ibh);
         if (bgfx::isValid(texture)) bgfx::destroy(texture);
+        if (bgfx::isValid(waterVbh)) bgfx::destroy(waterVbh);
+        if (bgfx::isValid(waterIbh)) bgfx::destroy(waterIbh);
     }
     
     void generate() {
         vertices.clear();
         indices.clear();
+        waterVertices.clear();
+        waterIndices.clear();
+        hasWater = false;
         
         // Generate vertices with biome-specific terrain
         generateBiomeTerrain();
         generateIndices();
         
+        // Check if this chunk needs water and generate water plane if needed
+        checkAndGenerateWater();
+        
         // Validate chunk geometry
         validateChunkGeometry();
         
         std::cout << "Generated " << getBiomeName() << " chunk (" << chunkX << ", " << chunkZ 
-                  << ") with " << vertices.size() << " vertices" << std::endl;
+                  << ") with " << vertices.size() << " vertices";
+        if (hasWater) {
+            std::cout << " (has water)";
+        }
+        std::cout << std::endl;
     }
     
 private:
@@ -378,6 +403,11 @@ private:
         float biomeNoise = bx::sin(worldX * 0.001f) * bx::cos(worldZ * 0.0008f);
         biomeNoise += bx::sin(worldX * 0.0005f + worldZ * 0.0007f) * 0.3f;
         
+        // Add ocean areas using large-scale noise
+        float oceanNoise = bx::sin(worldX * 0.0003f) * bx::cos(worldZ * 0.0004f);
+        oceanNoise += bx::sin(worldX * 0.0002f + worldZ * 0.0003f) * 0.5f;
+        bool isOceanArea = oceanNoise < -0.6f;  // Specific areas are oceans
+        
         // Calculate weights for each biome based on distance from thresholds
         float swampWeight = 1.0f - bx::clamp((biomeNoise + 0.3f) / 0.4f, 0.0f, 1.0f);  // Strong below -0.3
         float desertWeight = bx::max(0.0f, 1.0f - bx::abs(biomeNoise + 0.2f) / 0.2f);    // Peak at -0.2
@@ -394,16 +424,35 @@ private:
         }
         
         // Calculate height for each biome type
-        float swampHeight = baseNoise * HEIGHT_SCALE * 0.4f + detailNoise2 * HEIGHT_SCALE * 0.15f + fineNoise * HEIGHT_SCALE * 0.05f - 1.0f;
+        // Swamps: Low wetlands, oscillating around sea level for patches of water and land
+        float swampVariation = bx::sin(worldX * 0.08f) * bx::cos(worldZ * 0.07f) * 0.8f; // Create patchy wetlands
+        float swampHeight = baseNoise * HEIGHT_SCALE * 0.2f + swampVariation + detailNoise2 * HEIGHT_SCALE * 0.1f + 0.5f;
         
-        float desertHeight = baseNoise * HEIGHT_SCALE * 1.2f + detailNoise1 * HEIGHT_SCALE * 0.3f + fineNoise * HEIGHT_SCALE * 0.1f;
+        // Deserts: Dry, above sea level with dunes
+        float desertHeight = baseNoise * HEIGHT_SCALE * 1.2f + detailNoise1 * HEIGHT_SCALE * 0.3f + fineNoise * HEIGHT_SCALE * 0.1f + 3.0f;
         
-        float grasslandHeight = baseNoise * HEIGHT_SCALE * 1.5f + detailNoise1 * HEIGHT_SCALE * 0.8f + detailNoise2 * HEIGHT_SCALE * 0.4f + fineNoise * HEIGHT_SCALE * 0.2f;
+        // Grasslands: Rolling hills, can have some low areas near water
+        float grasslandHeight = baseNoise * HEIGHT_SCALE * 1.5f + detailNoise1 * HEIGHT_SCALE * 0.8f + detailNoise2 * HEIGHT_SCALE * 0.4f + fineNoise * HEIGHT_SCALE * 0.2f + 2.0f;
         
-        float mountainHeight = (baseNoise + 0.2f) * HEIGHT_SCALE * 2.5f + detailNoise1 * HEIGHT_SCALE * 1.2f + detailNoise2 * HEIGHT_SCALE * 0.6f + fineNoise * HEIGHT_SCALE * 0.3f + 8.0f;
+        // Mountains: High elevation, only deep valleys might have water
+        float mountainHeight = (baseNoise + 0.2f) * HEIGHT_SCALE * 2.5f + detailNoise1 * HEIGHT_SCALE * 1.2f + detailNoise2 * HEIGHT_SCALE * 0.6f + fineNoise * HEIGHT_SCALE * 0.3f + 10.0f;
         
         // Blend heights based on biome weights for seamless transitions
         float blendedHeight = swampHeight * swampWeight + desertHeight * desertWeight + grasslandHeight * grasslandWeight + mountainHeight * mountainWeight;
+        
+        // If this is an ocean area, create underwater terrain
+        if (isOceanArea) {
+            // Ocean floor is below sea level
+            float oceanDepth = 3.0f + baseNoise * 2.0f + detailNoise1 * 0.5f;
+            blendedHeight = SEA_LEVEL - oceanDepth;
+        }
+        
+        // Apply underwater flattening - terrain below sea level gets progressively flatter
+        if (blendedHeight < SEA_LEVEL) {
+            float depthBelowSeaLevel = SEA_LEVEL - blendedHeight;
+            float flatteningFactor = 1.0f - bx::min(depthBelowSeaLevel * OCEAN_DEPTH_SCALE, 0.8f);
+            blendedHeight = SEA_LEVEL - (depthBelowSeaLevel * flatteningFactor);
+        }
         
         return blendedHeight;
     }
@@ -426,6 +475,59 @@ private:
                 indices.push_back(topRight);
                 indices.push_back(bottomLeft);
                 indices.push_back(bottomRight);
+            }
+        }
+    }
+    
+    void checkAndGenerateWater() {
+        // Check if any terrain vertices are below sea level
+        hasWater = false;
+        for (const auto& vertex : vertices) {
+            if (vertex.y < SEA_LEVEL) {
+                hasWater = true;
+                break;
+            }
+        }
+        
+        if (!hasWater) return;
+        
+        // Generate a simple water plane at sea level for this chunk
+        waterVertices.clear();
+        waterIndices.clear();
+        
+        // Create water plane vertices (simple grid at sea level)
+        const int waterResolution = 8; // Lower resolution for water plane
+        const float waterScale = float(CHUNK_SIZE) / float(waterResolution);
+        
+        for (int z = 0; z <= waterResolution; z++) {
+            for (int x = 0; x <= waterResolution; x++) {
+                TerrainVertex waterVertex;
+                waterVertex.x = (chunkX * CHUNK_SIZE + x * waterScale) * SCALE;
+                waterVertex.y = SEA_LEVEL - 5.0f; // Match the terrain offset
+                waterVertex.z = (chunkZ * CHUNK_SIZE + z * waterScale) * SCALE;
+                waterVertex.u = float(x) / waterResolution;
+                waterVertex.v = float(z) / waterResolution;
+                
+                waterVertices.push_back(waterVertex);
+            }
+        }
+        
+        // Generate water indices
+        const int waterVertexRowSize = waterResolution + 1;
+        for (int z = 0; z < waterResolution; z++) {
+            for (int x = 0; x < waterResolution; x++) {
+                int topLeft = z * waterVertexRowSize + x;
+                int topRight = z * waterVertexRowSize + (x + 1);
+                int bottomLeft = (z + 1) * waterVertexRowSize + x;
+                int bottomRight = (z + 1) * waterVertexRowSize + (x + 1);
+                
+                waterIndices.push_back(topLeft);
+                waterIndices.push_back(bottomLeft);
+                waterIndices.push_back(topRight);
+                
+                waterIndices.push_back(topRight);
+                waterIndices.push_back(bottomLeft);
+                waterIndices.push_back(bottomRight);
             }
         }
     }
@@ -528,6 +630,19 @@ public:
         } else {
             std::cout << "Successfully created " << getBiomeName() << " chunk (" << chunkX << ", " << chunkZ 
                       << ") with " << vertices.size() << " vertices and " << indices.size() << " indices" << std::endl;
+        }
+        
+        // Create water buffers if needed
+        if (hasWater && !waterVertices.empty() && !waterIndices.empty()) {
+            const bgfx::Memory* waterVertexMem = bgfx::copy(waterVertices.data(), waterVertices.size() * sizeof(TerrainVertex));
+            const bgfx::Memory* waterIndexMem = bgfx::copy(waterIndices.data(), waterIndices.size() * sizeof(uint16_t));
+            
+            waterVbh = bgfx::createVertexBuffer(waterVertexMem, terrainLayout);
+            waterIbh = bgfx::createIndexBuffer(waterIndexMem);
+            
+            if (!bgfx::isValid(waterVbh) || !bgfx::isValid(waterIbh)) {
+                std::cerr << "ERROR: Failed to create water buffers for chunk (" << chunkX << ", " << chunkZ << ")" << std::endl;
+            }
         }
     }
     
@@ -1215,6 +1330,11 @@ public:
             bx::mtxIdentity(chunkMatrix);
             bx::mtxMul(chunkMatrix, chunkMatrix, translation);
             
+            // Set terrain rendering state
+            uint64_t terrainState = BGFX_STATE_DEFAULT;
+            terrainState &= ~BGFX_STATE_CULL_MASK;
+            bgfx::setState(terrainState);
+            
             // Render this chunk with its biome-specific texture
             render_object_at_position(chunk->vbh, chunk->ibh, program, chunk->texture, texUniform, chunkMatrix);
             renderedChunks++;
@@ -1226,6 +1346,31 @@ public:
         }
         
         debugFrameCount++;
+    }
+    
+    // Render water for all loaded chunks that have water
+    void renderWater(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform, bgfx::TextureHandle waterTexture) {
+        for (const auto& pair : loadedChunks) {
+            const auto& chunk = pair.second;
+            
+            // Skip chunks without water
+            if (!chunk->hasWater || !bgfx::isValid(chunk->waterVbh) || !bgfx::isValid(chunk->waterIbh)) {
+                continue;
+            }
+            
+            // Create transform matrix for water (no offset needed since we included it in vertex generation)
+            float waterMatrix[16];
+            bx::mtxIdentity(waterMatrix);
+            
+            // Set water state before rendering
+            uint64_t waterState = BGFX_STATE_DEFAULT;
+            waterState |= BGFX_STATE_BLEND_ALPHA;
+            waterState &= ~BGFX_STATE_CULL_MASK;
+            bgfx::setState(waterState);
+            
+            // Render water plane with transparency
+            render_object_at_position(chunk->waterVbh, chunk->waterIbh, program, waterTexture, texUniform, waterMatrix);
+        }
     }
     
     // Get chunk info for debugging
@@ -1585,6 +1730,47 @@ bgfx::TextureHandle load_png_texture(const char* filePath) {
     return handle;
 }
 
+// Create a semi-transparent water texture
+bgfx::TextureHandle create_water_texture() {
+    std::cout << "Creating water texture..." << std::endl;
+    
+    const uint32_t textureWidth = 128;  // Lower resolution for water
+    const uint32_t textureHeight = 128;
+    const uint32_t textureSize = textureWidth * textureHeight * 4;
+    
+    const bgfx::Memory* texMem = bgfx::alloc(textureSize);
+    uint8_t* data = texMem->data;
+    
+    // Create a semi-transparent blue water texture with subtle waves
+    for (uint32_t y = 0; y < textureHeight; ++y) {
+        for (uint32_t x = 0; x < textureWidth; ++x) {
+            uint32_t offset = (y * textureWidth + x) * 4;
+            
+            // Create wave pattern
+            float waveX = bx::sin(x * 0.1f) * 0.5f + 0.5f;
+            float waveY = bx::cos(y * 0.08f) * 0.5f + 0.5f;
+            float wave = waveX * waveY;
+            
+            // Base water color (blue-teal)
+            uint8_t r = 40 + uint8_t(wave * 20);
+            uint8_t g = 100 + uint8_t(wave * 30);
+            uint8_t b = 160 + uint8_t(wave * 40);
+            uint8_t a = 180; // Semi-transparent
+            
+            data[offset + 0] = r;
+            data[offset + 1] = g;
+            data[offset + 2] = b;
+            data[offset + 3] = a;
+        }
+    }
+    
+    uint64_t textureFlags = BGFX_TEXTURE_NONE;
+    textureFlags |= BGFX_SAMPLER_MIN_ANISOTROPIC;
+    textureFlags |= BGFX_SAMPLER_MAG_ANISOTROPIC;
+    
+    return bgfx::createTexture2D(textureWidth, textureHeight, false, 1, bgfx::TextureFormat::RGBA8, textureFlags, texMem);
+}
+
 // Legacy function for single biome textures (kept for compatibility)
 bgfx::TextureHandle create_biome_texture(BiomeType biome) {
     std::cout << "Creating " << (biome == BiomeType::DESERT ? "sand" : 
@@ -1743,9 +1929,9 @@ void render_object_at_position(bgfx::VertexBufferHandle vbh, bgfx::IndexBufferHa
     bgfx::setVertexBuffer(0, vbh);
     bgfx::setIndexBuffer(ibh);
     
-    uint64_t state = BGFX_STATE_DEFAULT;
-    state &= ~BGFX_STATE_CULL_MASK;
-    bgfx::setState(state);
+    // State is managed by caller now to support different render states
+    // Default state is set by terrain and object rendering
+    // Water rendering sets its own transparency state
     
     bgfx::submit(0, program);
 }
@@ -1868,9 +2054,15 @@ int main(int argc, char* argv[]) {
     // Create textures
     bgfx::TextureHandle proceduralTexture = create_procedural_texture();
     bgfx::TextureHandle pngTexture = load_png_texture("assets/sandy_gravel_02_diff_1k.png");
+    bgfx::TextureHandle waterTexture = create_water_texture();
     
     if (!bgfx::isValid(proceduralTexture)) {
         std::cerr << "Failed to create procedural texture!" << std::endl;
+        return 1;
+    }
+    
+    if (!bgfx::isValid(waterTexture)) {
+        std::cerr << "Failed to create water texture!" << std::endl;
         return 1;
     }
     
@@ -2305,11 +2497,20 @@ int main(int argc, char* argv[]) {
         // Render all loaded terrain chunks
         chunkManager.renderChunks(texProgram, s_texColor);
         
+        // Render water with transparency enabled
+        chunkManager.renderWater(texProgram, s_texColor, waterTexture);
+        
         // Render player as a colored cube
         float playerMatrix[16], playerTranslation[16], playerScale[16];
         bx::mtxScale(playerScale, player.size, player.size, player.size);
         bx::mtxTranslate(playerTranslation, player.position.x, player.position.y, player.position.z);
         bx::mtxMul(playerMatrix, playerScale, playerTranslation);
+        
+        // Set default state for objects
+        uint64_t objState = BGFX_STATE_DEFAULT;
+        objState &= ~BGFX_STATE_CULL_MASK;
+        bgfx::setState(objState);
+        
         render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, playerMatrix);
         
         // Render resource nodes
@@ -2447,6 +2648,7 @@ int main(int argc, char* argv[]) {
     // Clean up resources
     bgfx::destroy(proceduralTexture);
     if (bgfx::isValid(pngTexture)) bgfx::destroy(pngTexture);
+    bgfx::destroy(waterTexture);
     bgfx::destroy(s_texColor);
     bgfx::destroy(ibh);
     bgfx::destroy(vbh);
