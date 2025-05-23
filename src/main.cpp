@@ -2471,29 +2471,29 @@ int main(int argc, char* argv[]) {
         
         // Render debug overlay if enabled
         if (debugOverlay.enabled) {
-            // Create debug panel background (bright red for testing) - using RGBA format
-            uiRenderer.panel(currentWidth - 220, 10, 210, 80, 0xFF0000FF); // Red with full alpha
+            // Create debug panel background (black with transparency) - ABGR format - taller panel
+            uiRenderer.panel(currentWidth - 220, 10, 210, 110, 0xAA000000); // Black with 66% alpha (ABGR)
             
-            // Render FPS and debug info with custom UI
+            // Render FPS and debug info with custom UI - better line spacing for 24px font
             char fpsText[64];
             snprintf(fpsText, sizeof(fpsText), "FPS: %3d (%4.1fms)", (int)debugOverlay.fps, debugOverlay.frameTime);
             uiRenderer.text(currentWidth - 210, 25, fpsText, UIColors::TEXT_NORMAL);
             
             snprintf(fpsText, sizeof(fpsText), "Chunks: %d", (int)chunkManager.getLoadedChunkInfo().size());
-            uiRenderer.text(currentWidth - 210, 45, fpsText, UIColors::TEXT_NORMAL);
+            uiRenderer.text(currentWidth - 210, 55, fpsText, UIColors::TEXT_NORMAL);  // 30px spacing instead of 20px
             
             snprintf(fpsText, sizeof(fpsText), "Player: %.1f,%.1f", player.position.x, player.position.z);
-            uiRenderer.text(currentWidth - 210, 65, fpsText, UIColors::TEXT_NORMAL);
+            uiRenderer.text(currentWidth - 210, 85, fpsText, UIColors::TEXT_NORMAL);  // 30px spacing instead of 20px
         }
         
         // Render inventory overlay if enabled
-        inventory.renderOverlay();
+        inventory.renderOverlay(uiRenderer);
         
         // Render skills overlay if enabled
-        player.skills.renderOverlay();
+        player.skills.renderOverlay(uiRenderer, currentHeight);
         
         // Render player health bar (always visible)
-        player.renderHealthBar();
+        player.renderHealthBar(uiRenderer, currentWidth);
         
         // Render hover info if available (centered at top)
         if (hasHoverInfo && !hoverInfo.empty()) {

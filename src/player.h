@@ -7,6 +7,7 @@
 // Forward declarations
 struct NPC;
 class ChunkManager;
+class UIRenderer;
 
 // Player character with movement, combat, and skills
 struct Player {
@@ -44,5 +45,5 @@ struct Player {
     bool canTakeDamage(float currentTime) const;
     void heal(int amount);
     void respawn();
-    void renderHealthBar() const;
+    void renderHealthBar(UIRenderer& uiRenderer, float screenWidth) const;
 };

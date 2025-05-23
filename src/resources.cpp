@@ -1,4 +1,5 @@
 #include "resources.h"
+#include "ui.h"
 #include <bgfx/bgfx.h>
 
 // ResourceNode implementation
@@ -65,22 +66,32 @@ void PlayerInventory::toggleOverlay() {
     std::cout << "Inventory overlay " << (showOverlay ? "enabled" : "disabled") << std::endl;
 }
 
-void PlayerInventory::renderOverlay() const {
+void PlayerInventory::renderOverlay(UIRenderer& uiRenderer) const {
     if (!showOverlay) return;
     
-    // Position inventory in top left corner
-    int x = 1; // 1 character from left edge
-    int y = 1; // 1 character from top edge
+    // Position inventory in top left corner with custom UI
+    float panelX = 10.0f;
+    float panelY = 10.0f;
+    float panelWidth = 180.0f;
+    float panelHeight = 140.0f;
+    
+    // Render inventory panel background (black with transparency)
+    uiRenderer.panel(panelX, panelY, panelWidth, panelHeight, 0xAA000000);
     
     // Render inventory header
-    bgfx::dbgTextPrintf(x, y, 0x0f, "=== INVENTORY ===");
+    uiRenderer.text(panelX + 10, panelY + 20, "=== INVENTORY ===", UIColors::TEXT_HIGHLIGHT);
     
-    // Render resource counts with color coding
-    bgfx::dbgTextPrintf(x, y + 1, 0x06, "Copper: %d", copper);  // Orange/brown color
-    bgfx::dbgTextPrintf(x, y + 2, 0x08, "Iron:   %d", iron);    // Gray color
-    bgfx::dbgTextPrintf(x, y + 3, 0x07, "Stone:  %d", stone);   // Light gray color
+    // Render resource counts with proper spacing
+    char inventoryText[64];
+    snprintf(inventoryText, sizeof(inventoryText), "Copper: %d", copper);
+    uiRenderer.text(panelX + 10, panelY + 50, inventoryText, UIColors::TEXT_NORMAL);
     
-    // Render footer
-    bgfx::dbgTextPrintf(x, y + 4, 0x0f, "=================");
-    bgfx::dbgTextPrintf(x, y + 5, 0x0a, "Press I to close");    // Green color for instruction
+    snprintf(inventoryText, sizeof(inventoryText), "Iron:   %d", iron);
+    uiRenderer.text(panelX + 10, panelY + 75, inventoryText, UIColors::TEXT_NORMAL);
+    
+    snprintf(inventoryText, sizeof(inventoryText), "Stone:  %d", stone);
+    uiRenderer.text(panelX + 10, panelY + 100, inventoryText, UIColors::TEXT_NORMAL);
+    
+    // Render footer instruction
+    uiRenderer.text(panelX + 10, panelY + 125, "Press I to close", UIColors::GRAY);
 }

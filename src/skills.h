@@ -4,6 +4,9 @@
 #include <string>
 #include <iostream>
 
+// Forward declaration for UIRenderer
+class UIRenderer;
+
 // Skill types available in the game
 enum class SkillType {
     ATHLETICS,
@@ -33,6 +36,6 @@ struct PlayerSkills {
     PlayerSkills();
     
     void toggleOverlay();
-    void renderOverlay() const;
+    void renderOverlay(UIRenderer& uiRenderer, float screenHeight) const;
     Skill& getSkill(SkillType type);
 };

@@ -6002,7 +6002,8 @@ CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o: src/skills.cpp \
   deps/bx/include/bx/simd_t.h \
   deps/bx/include/bx/typetraits.h \
   deps/bx/include/bx/uint32_t.h \
-  src/skills.h
+  src/skills.h \
+  src/ui.h
 
 CMakeFiles/MyFirstCppGame.dir/src/ui.cpp.o: src/ui.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \

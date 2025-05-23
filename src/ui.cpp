@@ -128,10 +128,10 @@ bool FontAtlas::init(const char* fontPath, float size) {
         stbtt_FreeBitmap(bitmap, nullptr);
     }
     
-    // Create BGFX texture
+    // Create BGFX texture with linear filtering for smoother text
     const bgfx::Memory* mem = bgfx::copy(fontData.data(), fontData.size());
     texture = bgfx::createTexture2D(atlasWidth, atlasHeight, false, 1, bgfx::TextureFormat::R8,
-                                   BGFX_TEXTURE_NONE | BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT, mem);
+                                   BGFX_TEXTURE_NONE | BGFX_SAMPLER_MIN_ANISOTROPIC | BGFX_SAMPLER_MAG_ANISOTROPIC, mem);
     
     printf("Real font atlas created: %s, %d characters, %dx%d texture\n", 
            systemFont, (int)glyphs.size(), atlasWidth, atlasHeight);
@@ -235,8 +235,8 @@ bool UIRenderer::init(const char* fontPath) {
     // Initialize vertex layout
     UIVertex::init();
     
-    // Initialize font atlas
-    if (!m_fontAtlas.init(fontPath, 16.0f)) {
+    // Initialize font atlas with larger size for better readability
+    if (!m_fontAtlas.init(fontPath, 24.0f)) {
         printf("UI: Failed to initialize font atlas\n");
         return false;
     }

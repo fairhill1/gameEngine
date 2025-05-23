@@ -816,5 +816,6 @@ CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__fwd/stack.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/print \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/unistd.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ui.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bgfx/include/bgfx/bgfx.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/bgfx/include/bgfx/defines.h

@@ -1,5 +1,6 @@
 #include "player.h"
 #include "npcs.h"
+#include "ui.h"
 #include <bgfx/bgfx.h>
 #include <cstdlib>
 
@@ -43,19 +44,23 @@ void Player::respawn() {
     lastDamageTime = 0.0f;
 }
 
-void Player::renderHealthBar() const {
+void Player::renderHealthBar(UIRenderer& uiRenderer, float screenWidth) const {
     // Calculate health percentage for color coding
     float healthPercent = (float)health / (float)maxHealth;
     
     // Choose color based on health percentage
     uint32_t healthColor;
-    if (healthPercent > 0.7f) healthColor = 0x0a; // Green
-    else if (healthPercent > 0.3f) healthColor = 0x0e; // Yellow  
-    else healthColor = 0x0c; // Red
+    if (healthPercent > 0.7f) healthColor = UIColors::WHITE; // White for healthy
+    else if (healthPercent > 0.3f) healthColor = UIColors::TEXT_WARNING; // Yellow for wounded
+    else healthColor = UIColors::TEXT_ERROR; // Red for critical
     
-    // Position in top-middle of screen (assuming 80 character width)
-    int centerX = 35; // Approximate center for "Health: 100/100"
-    int topY = 1;     // Top row
+    // Position in top-center of screen
+    char healthText[32];
+    snprintf(healthText, sizeof(healthText), "Health: %d/%d", health, maxHealth);
     
-    bgfx::dbgTextPrintf(centerX, topY, healthColor, "Health: %d/%d", health, maxHealth);
+    // Center the text based on screen width
+    float textX = (screenWidth - 120.0f) / 2.0f; // Approximate centering for health text
+    float textY = 15.0f; // Top area
+    
+    uiRenderer.text(textX, textY, healthText, healthColor);
 }

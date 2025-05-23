@@ -1,4 +1,5 @@
 #include "skills.h"
+#include "ui.h"
 #include <bgfx/bgfx.h>
 #include <bx/math.h>
 
@@ -41,29 +42,40 @@ void PlayerSkills::toggleOverlay() {
     std::cout << "Skills overlay " << (showOverlay ? "enabled" : "disabled") << std::endl;
 }
 
-void PlayerSkills::renderOverlay() const {
+void PlayerSkills::renderOverlay(UIRenderer& uiRenderer, float screenHeight) const {
     if (!showOverlay) return;
     
-    // Position skills in bottom left corner
-    int x = 1;
-    int y = 25; // Bottom left, safe for 600px window (about 37 rows total)
+    // Position skills in bottom left corner with custom UI
+    float panelX = 10.0f;
+    float panelY = screenHeight - 200.0f; // 200px from bottom
+    float panelWidth = 200.0f;
+    float panelHeight = 180.0f;
     
-    // Render skills header with black background
-    bgfx::dbgTextPrintf(x, y, 0x0f, "=== SKILLS ===");  // white text on black background
+    // Render skills panel background (black with transparency)
+    uiRenderer.panel(panelX, panelY, panelWidth, panelHeight, 0xAA000000);
     
-    // Render each skill
-    int lineOffset = 1;
+    // Render skills header
+    uiRenderer.text(panelX + 10, panelY + 20, "=== SKILLS ===", UIColors::TEXT_HIGHLIGHT);
+    
+    // Render each skill with proper spacing
+    float lineY = panelY + 50;
     for (const auto& [type, skill] : skills) {
+        // Skill name and level
+        char skillText[64];
+        snprintf(skillText, sizeof(skillText), "%s Lv.%d", skill.name.c_str(), skill.level);
+        uiRenderer.text(panelX + 10, lineY, skillText, UIColors::TEXT_NORMAL);
+        
+        // XP progress
         int xpPercent = (int)((skill.experience / skill.experienceToNextLevel) * 100.0f);
-        bgfx::dbgTextPrintf(x, y + lineOffset, 0x0b, "%s Lv.%d", skill.name.c_str(), skill.level);  // cyan on black
-        bgfx::dbgTextPrintf(x, y + lineOffset + 1, 0x03, "  XP: %d/%d (%d%%)", 
-                           (int)skill.experience, (int)skill.experienceToNextLevel, xpPercent);  // cyan on black
-        lineOffset += 2;
+        snprintf(skillText, sizeof(skillText), "  XP: %d/%d (%d%%)", 
+                (int)skill.experience, (int)skill.experienceToNextLevel, xpPercent);
+        uiRenderer.text(panelX + 10, lineY + 25, skillText, UIColors::GRAY);
+        
+        lineY += 45; // Space between skills
     }
     
-    // Render footer
-    bgfx::dbgTextPrintf(x, y + lineOffset, 0x0f, "===============");  // white on black
-    bgfx::dbgTextPrintf(x, y + lineOffset + 1, 0x0a, "Press C to close");  // green on black
+    // Render footer instruction
+    uiRenderer.text(panelX + 10, panelY + panelHeight - 25, "Press C to close", UIColors::GRAY);
 }
 
 Skill& PlayerSkills::getSkill(SkillType type) {

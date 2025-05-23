@@ -4,6 +4,9 @@
 #include <iostream>
 #include <cstdint>
 
+// Forward declaration for UIRenderer
+class UIRenderer;
+
 // Resource types available in the game
 enum class ResourceType {
     COPPER,
@@ -38,5 +41,5 @@ struct PlayerInventory {
     void addResource(ResourceType type, int amount);
     void printInventory() const;
     void toggleOverlay();
-    void renderOverlay() const;
+    void renderOverlay(UIRenderer& uiRenderer) const;
 };
