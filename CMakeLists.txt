@@ -31,6 +31,7 @@ message(STATUS "SDL3_LIBRARIES: ${SDL3_LIBRARIES}")
 set(SOURCES 
     src/main.cpp
     src/model.cpp
+    src/skills.cpp
 )
 
 # Create executable

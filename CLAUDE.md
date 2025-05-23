@@ -539,6 +539,13 @@ The game features a **skill-based progression system** that tracks player abilit
 - **Effect**: +5% damage per level when fighting without weapons
 - **Leveling**: Same exponential curve as Athletics
 
+#### Mining
+- **XP Gain**: Resource gathering
+  - Each mining action: 2 XP
+  - Depleting a node: 10 XP (total)
+- **Effect**: +5% mining damage per level (faster resource gathering)
+- **Leveling**: Same exponential curve as other skills
+
 ### Skills UI
 - **Toggle**: Press 'C' to show/hide skills overlay
 - **Position**: Bottom-left corner of screen
@@ -549,6 +556,8 @@ The game features a **skill-based progression system** that tracks player abilit
     XP: 45/225 (20%)
   Unarmed Lv.2
     XP: 30/150 (20%)
+  Mining Lv.1
+    XP: 8/100 (8%)
   ===============
   Press C to close
   ```
@@ -834,14 +843,14 @@ make && ./MyFirstCppGame
 8. **Player Health System** - 100 HP with top-screen display, damage immunity, respawn
 9. **NPC Health System** - Type-specific health pools (40-80 HP) with visual damage indicators
 10. **Combat Framework** - Damage/healing mechanics, hostility states, testing keys (H/J/K)
-11. **Player Skills System** - Athletics (movement XP) and Unarmed (combat XP) skills with level progression
+11. **Player Skills System** - Athletics (movement XP), Unarmed (combat XP), and Mining (resource gathering XP) skills with level progression
 
 ### 🎯 Planned Next Features
 1. **Crafting System** - Convert resources into tools/items (hotkey: TAB)
 2. **Character Stats Screen** - Player progression tracking (hotkey: P)
 3. **Tool Durability** - Crafted mining tools with efficiency bonuses
 4. **NPC Interaction** - Trade with merchants, quests from villagers
-5. **Additional Skills** - Mining, Crafting, Trading skills
+5. **Additional Skills** - Crafting, Trading, Stealth skills
 6. **Skill Persistence** - Save/load skill progress between sessions
 
 ## Future Improvements

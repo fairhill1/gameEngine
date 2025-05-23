@@ -180,6 +180,30 @@ src/model.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/model.cpp.s
 .PHONY : src/model.cpp.s
 
+src/skills.o: src/skills.cpp.o
+.PHONY : src/skills.o
+
+# target to build an object file
+src/skills.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o
+.PHONY : src/skills.cpp.o
+
+src/skills.i: src/skills.cpp.i
+.PHONY : src/skills.i
+
+# target to preprocess a source file
+src/skills.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.i
+.PHONY : src/skills.cpp.i
+
+src/skills.s: src/skills.cpp.s
+.PHONY : src/skills.s
+
+# target to generate assembly for a file
+src/skills.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.s
+.PHONY : src/skills.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -195,6 +219,9 @@ help:
 	@echo "... src/model.o"
 	@echo "... src/model.i"
 	@echo "... src/model.s"
+	@echo "... src/skills.o"
+	@echo "... src/skills.i"
+	@echo "... src/skills.s"
 .PHONY : help
 
 
