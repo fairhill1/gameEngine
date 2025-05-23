@@ -2574,6 +2574,11 @@ int main(int argc, char* argv[]) {
             render_object_at_position(npcVbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, npcMatrix);
         }
         
+        // Set state for test cubes (with culling disabled for spinning cubes)
+        uint64_t testCubeState = BGFX_STATE_DEFAULT;
+        testCubeState &= ~BGFX_STATE_CULL_MASK;
+        bgfx::setState(testCubeState);
+        
         // Render colored cube (left side)
         float coloredMtx[16], translation[16], rotation[16];
         bx::mtxTranslate(translation, -2.5f, 0.0f, 0.0f);
@@ -2586,6 +2591,7 @@ int main(int argc, char* argv[]) {
         bx::mtxTranslate(translation, 2.5f, 0.0f, 0.0f);
         bx::mtxRotateXY(rotation, time * -0.21f, time * -0.37f);
         bx::mtxMul(texturedMtx, rotation, translation);
+        bgfx::setState(testCubeState);
         render_object_at_position(texVbh, texIbh, texProgram, proceduralTexture, s_texColor, texturedMtx);
         
         // Render PNG textured cube (top) if available
@@ -2594,6 +2600,7 @@ int main(int argc, char* argv[]) {
             bx::mtxTranslate(translation, 0.0f, 2.5f, 0.0f);
             bx::mtxRotateXY(rotation, time * 0.15f, time * 0.3f);
             bx::mtxMul(pngTexMtx, rotation, translation);
+            bgfx::setState(testCubeState);
             render_object_at_position(texVbh, texIbh, texProgram, pngTexture, s_texColor, pngTexMtx);
         }
         
@@ -2608,6 +2615,7 @@ int main(int argc, char* argv[]) {
             bx::mtxMul(temp, scale, rotation);
             bx::mtxMul(modelMatrix, temp, translation);
             
+            bgfx::setState(testCubeState);
             gardenLampModel.render(texProgram, s_texColor, modelMatrix);
         }
         

@@ -2,7 +2,6 @@
 
 - refactor
 - proper UI
-- sealevel, rivers, lakes
 - trees
 - crafting
 - camera follow player
@@ -24,6 +23,10 @@
 - NPC color change in combat not working
 
 ## CHANGELOG
+
+# 0.1.1
+
+- sealevel, rivers, lake
 
 # 0.1 - 22.05.2025
 
