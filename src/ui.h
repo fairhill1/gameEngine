@@ -25,6 +25,9 @@ struct FontAtlas {
     bool init(const char* fontPath, float size);
     void destroy();
     const Glyph* getGlyph(char c) const;
+    
+private:
+    bool initFallbackFont(); // Fallback if TTF loading fails
 };
 
 // UI vertex format for text and panels
@@ -94,6 +97,7 @@ private:
     void flushBatch();
     void addQuad(float x, float y, float width, float height, float u0, float v0, float u1, float v1, uint32_t color);
     bgfx::ProgramHandle loadProgram(const char* vsName, const char* fsName);
+    
 };
 
 // Color utilities

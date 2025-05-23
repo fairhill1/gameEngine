@@ -2,6 +2,8 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <fstream>
+#include <vector>
 
 // STB TrueType for font loading
 #define STB_TRUETYPE_IMPLEMENTATION
@@ -13,39 +15,136 @@ bgfx::VertexLayout UIVertex::ms_layout;
 bool FontAtlas::init(const char* fontPath, float size) {
     fontSize = size;
     
-    // For now, create a simple built-in font atlas
-    // In a real implementation, you'd load a TTF file and generate SDF
+    // Try to load the Old Standard TT font
+    const char* systemFont = "src/OldStandardTT-Regular.ttf";
+    if (fontPath) systemFont = fontPath;
     
-    // Create a simple 8x8 bitmap font atlas
+    // Read font file
+    std::ifstream fontFile(systemFont, std::ios::binary | std::ios::ate);
+    if (!fontFile.is_open()) {
+        printf("Failed to open font file: %s, using fallback patterns\n", systemFont);
+        return initFallbackFont();
+    }
+    
+    std::streamsize fontFileSize = fontFile.tellg();
+    fontFile.seekg(0, std::ios::beg);
+    printf("Font file opened: %s, size: %ld bytes\n", systemFont, fontFileSize);
+    
+    std::vector<uint8_t> fontBuffer(fontFileSize);
+    if (!fontFile.read(reinterpret_cast<char*>(fontBuffer.data()), fontFileSize)) {
+        printf("Failed to read font file, using fallback patterns\n");
+        return initFallbackFont();
+    }
+    fontFile.close();
+    printf("Font file read successfully\n");
+    
+    // Check font file magic number for debugging
+    if (fontFileSize >= 4) {
+        printf("Font header bytes: %02X %02X %02X %02X\n", 
+               fontBuffer[0], fontBuffer[1], fontBuffer[2], fontBuffer[3]);
+    }
+    
+    // Initialize STB TrueType - try different offsets for font collections
+    stbtt_fontinfo fontInfo;
+    int offset = stbtt_GetFontOffsetForIndex(fontBuffer.data(), 0);
+    printf("STB font offset for index 0: %d\n", offset);
+    
+    if (offset < 0 || !stbtt_InitFont(&fontInfo, fontBuffer.data(), offset)) {
+        printf("STB TrueType failed to parse font data (offset=%d), using fallback patterns\n", offset);
+        return initFallbackFont();
+    }
+    printf("STB TrueType successfully initialized with offset %d!\n", offset);
+    
+    // Calculate font scale
+    float scale = stbtt_ScaleForPixelHeight(&fontInfo, size);
+    
+    // Create larger atlas for real fonts
+    atlasWidth = 512;
+    atlasHeight = 512;
+    std::vector<uint8_t> fontData(atlasWidth * atlasHeight, 0);
+    
+    // Pack characters into atlas
+    int currentX = 1, currentY = 1;
+    int rowHeight = 0;
+    
+    for (int c = 32; c < 127; c++) {
+        int width, height, xoff, yoff;
+        uint8_t* bitmap = stbtt_GetCodepointBitmap(&fontInfo, 0, scale, c, &width, &height, &xoff, &yoff);
+        
+        if (!bitmap) {
+            // Handle missing glyphs
+            Glyph glyph = {};
+            glyph.advance = size * 0.5f; // Default advance
+            glyphs[c] = glyph;
+            continue;
+        }
+        
+        // Check if we need to move to next row
+        if (currentX + width >= atlasWidth - 1) {
+            currentX = 1;
+            currentY += rowHeight + 1;
+            rowHeight = 0;
+        }
+        
+        // Make sure we don't overflow atlas
+        if (currentY + height >= atlasHeight - 1) {
+            printf("Font atlas overflow, stopping at character %d\n", c);
+            stbtt_FreeBitmap(bitmap, nullptr);
+            break;
+        }
+        
+        // Copy bitmap to atlas
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int atlasIndex = (currentY + y) * atlasWidth + (currentX + x);
+                fontData[atlasIndex] = bitmap[y * width + x];
+            }
+        }
+        
+        // Get advance width
+        int advanceWidth, leftSideBearing;
+        stbtt_GetCodepointHMetrics(&fontInfo, c, &advanceWidth, &leftSideBearing);
+        
+        // Store glyph info
+        Glyph glyph;
+        glyph.atlasX = currentX;
+        glyph.atlasY = currentY;
+        glyph.atlasWidth = width;
+        glyph.atlasHeight = height;
+        glyph.x = (float)currentX / atlasWidth;
+        glyph.y = (float)currentY / atlasHeight;
+        glyph.width = (float)width / atlasWidth;
+        glyph.height = (float)height / atlasHeight;
+        glyph.bearingX = xoff;
+        glyph.bearingY = yoff;
+        glyph.advance = advanceWidth * scale;
+        
+        glyphs[c] = glyph;
+        
+        // Update position
+        currentX += width + 1;
+        rowHeight = std::max(rowHeight, height);
+        
+        stbtt_FreeBitmap(bitmap, nullptr);
+    }
+    
+    // Create BGFX texture
+    const bgfx::Memory* mem = bgfx::copy(fontData.data(), fontData.size());
+    texture = bgfx::createTexture2D(atlasWidth, atlasHeight, false, 1, bgfx::TextureFormat::R8,
+                                   BGFX_TEXTURE_NONE | BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT, mem);
+    
+    printf("Real font atlas created: %s, %d characters, %dx%d texture\n", 
+           systemFont, (int)glyphs.size(), atlasWidth, atlasHeight);
+    return bgfx::isValid(texture);
+}
+
+bool FontAtlas::initFallbackFont() {
+    // Fallback to simple bitmap patterns if TTF loading fails
     atlasWidth = 128;
     atlasHeight = 128;
     
-    // Simple bitmap font data (8x8 characters, ASCII 32-127)
     unsigned char fontData[128 * 128];
     memset(fontData, 0, sizeof(fontData));
-    
-    // Create simple character patterns for basic ASCII
-    const char* patterns[] = {
-        // Space (32)
-        "        "
-        "        "
-        "        "
-        "        "
-        "        "
-        "        "
-        "        "
-        "        ",
-        // ! (33)
-        "   ##   "
-        "   ##   "
-        "   ##   "
-        "   ##   "
-        "   ##   "
-        "        "
-        "   ##   "
-        "        ",
-        // ... (we'll add more characters as needed)
-    };
     
     // Create simple bitmap patterns for basic characters
     for (int c = 32; c < 127; c++) {
@@ -63,7 +162,7 @@ bool FontAtlas::init(const char* fontPath, float size) {
         glyph.height = 8.0f / atlasHeight;
         glyph.bearingX = 0;
         glyph.bearingY = 8;
-        glyph.advance = c == ' ' ? 4 : 7; // Space is narrower
+        glyph.advance = c == ' ' ? 4 : 7;
         
         glyphs[c] = glyph;
         
@@ -74,7 +173,6 @@ bool FontAtlas::init(const char* fontPath, float size) {
                 int atlasY = charY * 8 + y;
                 uint8_t pixel = 0;
                 
-                // Generate simple character patterns
                 if (c == ' ') {
                     pixel = 0; // Space is transparent
                 } else if (c >= '0' && c <= '9') {
@@ -109,6 +207,7 @@ bool FontAtlas::init(const char* fontPath, float size) {
     texture = bgfx::createTexture2D(atlasWidth, atlasHeight, false, 1, bgfx::TextureFormat::R8,
                                    BGFX_TEXTURE_NONE, mem);
     
+    printf("Fallback font atlas created: %dx%d texture\n", atlasWidth, atlasHeight);
     return bgfx::isValid(texture);
 }
 
@@ -227,7 +326,8 @@ void UIRenderer::text(float x, float y, const char* text, uint32_t color, float 
         
         float charWidth = glyph->atlasWidth * scale;
         float charX = currentX + glyph->bearingX * scale;
-        float charY = y - glyph->bearingY * scale;
+        // Fix baseline - adjust Y by a consistent font baseline offset
+        float charY = y + (m_fontAtlas.fontSize * 0.8f) + glyph->bearingY * scale;
         
         // Add quad for this character
         addQuad(charX, charY, charWidth, charHeight, 
