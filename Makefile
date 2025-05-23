@@ -180,6 +180,78 @@ src/model.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/model.cpp.s
 .PHONY : src/model.cpp.s
 
+src/npcs.o: src/npcs.cpp.o
+.PHONY : src/npcs.o
+
+# target to build an object file
+src/npcs.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o
+.PHONY : src/npcs.cpp.o
+
+src/npcs.i: src/npcs.cpp.i
+.PHONY : src/npcs.i
+
+# target to preprocess a source file
+src/npcs.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.i
+.PHONY : src/npcs.cpp.i
+
+src/npcs.s: src/npcs.cpp.s
+.PHONY : src/npcs.s
+
+# target to generate assembly for a file
+src/npcs.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.s
+.PHONY : src/npcs.cpp.s
+
+src/player.o: src/player.cpp.o
+.PHONY : src/player.o
+
+# target to build an object file
+src/player.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o
+.PHONY : src/player.cpp.o
+
+src/player.i: src/player.cpp.i
+.PHONY : src/player.i
+
+# target to preprocess a source file
+src/player.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/player.cpp.i
+.PHONY : src/player.cpp.i
+
+src/player.s: src/player.cpp.s
+.PHONY : src/player.s
+
+# target to generate assembly for a file
+src/player.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/player.cpp.s
+.PHONY : src/player.cpp.s
+
+src/resources.o: src/resources.cpp.o
+.PHONY : src/resources.o
+
+# target to build an object file
+src/resources.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o
+.PHONY : src/resources.cpp.o
+
+src/resources.i: src/resources.cpp.i
+.PHONY : src/resources.i
+
+# target to preprocess a source file
+src/resources.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.i
+.PHONY : src/resources.cpp.i
+
+src/resources.s: src/resources.cpp.s
+.PHONY : src/resources.s
+
+# target to generate assembly for a file
+src/resources.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.s
+.PHONY : src/resources.cpp.s
+
 src/skills.o: src/skills.cpp.o
 .PHONY : src/skills.o
 
@@ -219,6 +291,15 @@ help:
 	@echo "... src/model.o"
 	@echo "... src/model.i"
 	@echo "... src/model.s"
+	@echo "... src/npcs.o"
+	@echo "... src/npcs.i"
+	@echo "... src/npcs.s"
+	@echo "... src/player.o"
+	@echo "... src/player.i"
+	@echo "... src/player.s"
+	@echo "... src/resources.o"
+	@echo "... src/resources.i"
+	@echo "... src/resources.s"
 	@echo "... src/skills.o"
 	@echo "... src/skills.i"
 	@echo "... src/skills.s"

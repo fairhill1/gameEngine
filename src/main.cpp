@@ -46,6 +46,9 @@ namespace tinygltf {
 // Include our model system
 #include "model.h"
 #include "skills.h"
+#include "resources.h"
+#include "npcs.h"
+#include "player.h"
 
 // Window dimensions
 const int WINDOW_WIDTH = 800;
@@ -686,245 +689,8 @@ void render_object_at_position(bgfx::VertexBufferHandle vbh, bgfx::IndexBufferHa
                               bgfx::UniformHandle texUniform, const float* modelMatrix);
 
 // Resource node system
-enum class ResourceType {
-    COPPER,
-    IRON,
-    STONE
-};
-
-struct ResourceNode {
-    bx::Vec3 position;
-    ResourceType type;
-    int health;
-    int maxHealth;
-    float size;
-    bool isActive;
-    
-    ResourceNode(float x, float y, float z, ResourceType resourceType, int hp = 100) 
-        : position({x, y, z}), type(resourceType), health(hp), maxHealth(hp), size(0.5f), isActive(true) {}
-    
-    bool canMine() const {
-        return isActive && health > 0;
-    }
-    
-    int mine(int damage = 25) {
-        if (!canMine()) return 0;
-        
-        health -= damage;
-        std::cout << "Mining " << getResourceName() << " - Health: " << health << "/" << maxHealth << std::endl;
-        
-        if (health <= 0) {
-            health = 0;
-            isActive = false;
-            std::cout << getResourceName() << " node depleted! Gained 1 " << getResourceName() << std::endl;
-            return 1; // Return resource gained
-        }
-        return 0;
-    }
-    
-    const char* getResourceName() const {
-        switch (type) {
-            case ResourceType::COPPER: return "Copper";
-            case ResourceType::IRON: return "Iron";
-            case ResourceType::STONE: return "Stone";
-            default: return "Unknown";
-        }
-    }
-    
-    uint32_t getColor() const {
-        switch (type) {
-            case ResourceType::COPPER: return 0xff4A90E2; // Orange-brown for copper
-            case ResourceType::IRON: return 0xff808080;   // Gray for iron
-            case ResourceType::STONE: return 0xff606060;  // Dark gray for stone
-            default: return 0xffffffff;
-        }
-    }
-};
 
 // Forward declarations
-struct Player;
-struct NPC;
-
-// NPC System
-enum class NPCType {
-    WANDERER,
-    VILLAGER,
-    MERCHANT
-};
-
-enum class NPCState {
-    WANDERING,
-    IDLE,
-    MOVING_TO_TARGET,
-    APPROACHING_ENEMY,  // Moving toward combat target
-    IN_COMBAT,          // Actively fighting
-    FLEEING             // Running away (for villagers)
-};
-
-struct NPC {
-    bx::Vec3 position;
-    bx::Vec3 velocity;
-    bx::Vec3 targetPosition;
-    NPCType type;
-    NPCState state;
-    float speed;
-    float size;
-    float stateTimer;
-    float maxStateTime;
-    bool isActive;
-    uint32_t color;
-    uint32_t baseColor;      // Original color for health calculation
-    int health;
-    int maxHealth;
-    bool isHostile;
-    float lastDamageTime;
-    
-    // Combat properties
-    Player* combatTarget;    // Who we're fighting
-    float lastAttackTime;
-    float attackCooldown;    // Time between attacks
-    float attackRange;       // How close to attack
-    float aggroRange;        // Detection range
-    float combatRange;       // Preferred fighting distance
-    int attackDamage;
-    float hitChance;         // 0.0 to 1.0
-    float dodgeChance;       // 0.0 to 1.0
-    float hitFlashTimer;     // Red flash when hit
-    
-    NPC(float x, float y, float z, NPCType npcType) 
-        : position({x, y, z}), velocity({0.0f, 0.0f, 0.0f}), targetPosition({x, y, z}),
-          type(npcType), state(NPCState::IDLE), speed(1.5f), size(0.8f), 
-          stateTimer(0.0f), maxStateTime(3.0f), isActive(true), isHostile(false), lastDamageTime(0.0f),
-          combatTarget(nullptr), lastAttackTime(0.0f), attackCooldown(1.5f), attackRange(1.5f), 
-          aggroRange(8.0f), combatRange(2.5f), attackDamage(10), hitChance(0.7f), dodgeChance(0.2f), hitFlashTimer(0.0f) {
-        
-        // Set NPC-specific properties
-        switch (type) {
-            case NPCType::WANDERER:
-                speed = 2.0f;
-                baseColor = 0xff00AA00; // Green
-                maxHealth = 60;         // Medium health
-                maxStateTime = 2.0f + (bx::sin(x * 0.1f) * 0.5f + 0.5f) * 3.0f; // 2-5 seconds
-                // Combat stats
-                attackDamage = 8;
-                hitChance = 0.65f;
-                dodgeChance = 0.25f;
-                attackCooldown = 1.8f;
-                break;
-            case NPCType::VILLAGER:
-                speed = 1.0f;
-                baseColor = 0xff0066FF; // Blue  
-                maxHealth = 40;         // Low health (peaceful)
-                maxStateTime = 4.0f + (bx::cos(z * 0.1f) * 0.5f + 0.5f) * 4.0f; // 4-8 seconds
-                // Combat stats (villagers flee instead of fight)
-                attackDamage = 0;
-                hitChance = 0.0f;
-                dodgeChance = 0.4f;  // Good at dodging while fleeing
-                aggroRange = 12.0f;  // Detect threats from farther away
-                break;
-            case NPCType::MERCHANT:
-                speed = 1.5f;
-                baseColor = 0xffFFAA00; // Orange
-                maxHealth = 80;         // High health (well-armed traders)
-                maxStateTime = 3.0f + (bx::sin((x + z) * 0.1f) * 0.5f + 0.5f) * 2.0f; // 3-5 seconds
-                // Combat stats (better equipped)
-                attackDamage = 12;
-                hitChance = 0.75f;
-                dodgeChance = 0.15f;
-                attackCooldown = 1.5f;
-                break;
-        }
-        
-        health = maxHealth;  // Start at full health
-        color = baseColor;   // Start with base color
-        updateHealthColor(); // Apply initial color
-    }
-    
-    // Forward declare update method - implemented after Player struct
-    void update(float deltaTime, float terrainHeight, Player* player, float currentTime);
-    
-    const char* getTypeName() const {
-        switch (type) {
-            case NPCType::WANDERER: return "Wanderer";
-            case NPCType::VILLAGER: return "Villager";
-            case NPCType::MERCHANT: return "Merchant";
-            default: return "Unknown";
-        }
-    }
-    
-    void takeDamage(int damage, float currentTime) {
-        health = bx::max(0, health - damage);
-        lastDamageTime = currentTime;
-        hitFlashTimer = 0.2f; // Flash red for 0.2 seconds
-        updateHealthColor();
-        
-        // Make NPC hostile when attacked (except villagers who flee)
-        if (type != NPCType::VILLAGER) {
-            isHostile = true;
-        }
-        
-        std::cout << getTypeName() << " took " << damage << " damage! Health: " << health << "/" << maxHealth;
-        if (health <= 0) {
-            std::cout << " - " << getTypeName() << " defeated!";
-            isActive = false;
-        }
-        std::cout << std::endl;
-    }
-    
-    void updateHealthColor() {
-        if (health <= 0) {
-            color = 0xff404040; // Dark gray when dead
-            return;
-        }
-        
-        // Flash red when hit
-        if (hitFlashTimer > 0) {
-            // Interpolate between red and base color based on timer
-            float flashIntensity = hitFlashTimer / 0.2f; // 0.2 is max flash duration
-            uint32_t r = 255;
-            uint32_t g = ((baseColor >> 8) & 0xFF) * (1.0f - flashIntensity);
-            uint32_t b = (baseColor & 0xFF) * (1.0f - flashIntensity);
-            color = 0xff000000 | (r << 16) | (g << 8) | b;
-            return;
-        }
-        
-        float healthPercent = (float)health / (float)maxHealth;
-        
-        if (isHostile) {
-            // Hostile NPCs get red tint
-            if (healthPercent > 0.7f) color = 0xffAA0000; // Dark red
-            else if (healthPercent > 0.3f) color = 0xff880000; // Darker red
-            else color = 0xff660000; // Very dark red
-        } else {
-            // Damaged but peaceful NPCs get darker versions of base color
-            if (healthPercent > 0.7f) {
-                color = baseColor; // Full color
-            } else if (healthPercent > 0.3f) {
-                // 50% darker
-                uint32_t r = ((baseColor >> 16) & 0xFF) / 2;
-                uint32_t g = ((baseColor >> 8) & 0xFF) / 2;
-                uint32_t b = (baseColor & 0xFF) / 2;
-                color = 0xff000000 | (r << 16) | (g << 8) | b;
-            } else {
-                // 75% darker (very dark)
-                uint32_t r = ((baseColor >> 16) & 0xFF) / 4;
-                uint32_t g = ((baseColor >> 8) & 0xFF) / 4;
-                uint32_t b = (baseColor & 0xFF) / 4;
-                color = 0xff000000 | (r << 16) | (g << 8) | b;
-            }
-        }
-    }
-    
-    bool canTakeDamage(float currentTime) const {
-        return (currentTime - lastDamageTime) > 0.5f; // 0.5 second damage immunity
-    }
-    
-    void heal(int amount) {
-        health = bx::min(maxHealth, health + amount);
-        updateHealthColor();
-        std::cout << getTypeName() << " healed " << amount << " HP! Health: " << health << "/" << maxHealth << std::endl;
-    }
-};
 
 // Chunk management system
 class ChunkManager {
@@ -1420,472 +1186,138 @@ private:
 // Skill types
 
 // Player system
-struct Player {
-    bx::Vec3 position;
-    bx::Vec3 targetPosition;
-    bool hasTarget;
-    bool isSprinting;
-    float moveSpeed;
-    float sprintSpeed;
-    float size;
-    int health;
-    int maxHealth;
-    float lastDamageTime;
-    
-    // Combat properties
-    NPC* combatTarget;       // Current NPC we're fighting
-    float lastAttackTime;
-    float attackCooldown;    // Time between attacks
-    int attackDamage;
-    float hitChance;         // 0.0 to 1.0
-    float dodgeChance;       // 0.0 to 1.0
-    bool inCombat;
-    float hitFlashTimer;     // Red flash when hit
-    
-    // Skills
-    PlayerSkills skills;
-    float lastMovementTime;
-    float distanceTraveled;
-    
-    Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
-               hasTarget(false), isSprinting(false), moveSpeed(0.05f), sprintSpeed(0.15f), size(0.3f),
-               health(100), maxHealth(100), lastDamageTime(0.0f),
-               combatTarget(nullptr), lastAttackTime(0.0f), attackCooldown(1.2f),
-               attackDamage(15), hitChance(0.8f), dodgeChance(0.3f), inCombat(false), hitFlashTimer(0.0f),
-               lastMovementTime(0.0f), distanceTraveled(0.0f) {}
-    
-    void setTarget(float x, float z, const ChunkManager& chunkManager, bool sprint = false) {
-        targetPosition.x = x;
-        targetPosition.z = z;
-        targetPosition.y = chunkManager.getHeightAt(x, z) + size - 5.0f; // Account for terrain offset
-        hasTarget = true;
-        isSprinting = sprint;
-    }
-    
-    void update(const ChunkManager& chunkManager, float currentTime, float deltaTime) {
-        // Update hit flash timer
-        if (hitFlashTimer > 0) {
-            hitFlashTimer -= deltaTime;
-            if (hitFlashTimer < 0) hitFlashTimer = 0;
-        }
-        
-        // Track movement for Athletics XP
-        bx::Vec3 oldPosition = position;
-        
-        // Handle combat if we have a target
-        if (combatTarget && combatTarget->isActive) {
-            float dx = combatTarget->position.x - position.x;
-            float dz = combatTarget->position.z - position.z;
-            float distance = bx::sqrt(dx * dx + dz * dz);
-            
-            // Check if we're in combat range
-            if (distance <= 3.0f) {
-                inCombat = true;
-                hasTarget = false; // Stop normal movement
-                
-                // Maintain combat distance
-                if (distance > 2.5f) {
-                    // Move closer
-                    position.x += (dx / distance) * moveSpeed * 2.0f;
-                    position.z += (dz / distance) * moveSpeed * 2.0f;
-                } else if (distance < 1.5f) {
-                    // Back up
-                    position.x -= (dx / distance) * moveSpeed;
-                    position.z -= (dz / distance) * moveSpeed;
-                }
-                
-                // Attack if cooldown is ready
-                if (currentTime - lastAttackTime >= attackCooldown) {
-                    // RNG for hit/miss
-                    float hitRoll = (rand() % 100) / 100.0f;
-                    float dodgeRoll = (rand() % 100) / 100.0f;
-                    
-                    if (hitRoll < hitChance && dodgeRoll > combatTarget->dodgeChance) {
-                        // Hit! Apply Unarmed skill modifier to damage
-                        float unarmedModifier = skills.getSkill(SkillType::UNARMED).getModifier();
-                        int actualDamage = (int)(attackDamage * unarmedModifier);
-                        combatTarget->takeDamage(actualDamage, currentTime);
-                        std::cout << "Player hits " << combatTarget->getTypeName() << " for " << actualDamage << " damage!" << std::endl;
-                        
-                        // Award Unarmed XP for successful hits
-                        skills.getSkill(SkillType::UNARMED).addExperience(5.0f);
-                    } else {
-                        std::cout << "Player misses!" << std::endl;
-                        // Small XP even for misses to encourage practice
-                        skills.getSkill(SkillType::UNARMED).addExperience(1.0f);
-                    }
-                    
-                    lastAttackTime = currentTime;
-                }
-            } else if (distance > 15.0f || !combatTarget->isActive) {
-                // Too far or target dead, exit combat
-                combatTarget = nullptr;
-                inCombat = false;
-            } else {
-                // Not in combat range yet - keep moving toward target
-                // Update target position in case NPC moved
-                targetPosition = combatTarget->position;
-                if (!hasTarget) {
-                    hasTarget = true;
-                    isSprinting = true; // Sprint to combat
-                }
-            }
-        } else {
-            inCombat = false;
-        }
-        
-        // Normal movement when not in active combat
-        if (hasTarget && !inCombat) {
-            bx::Vec3 direction = {
-                targetPosition.x - position.x,
-                0.0f,
-                targetPosition.z - position.z
-            };
-            
-            float distance = bx::sqrt(direction.x * direction.x + direction.z * direction.z);
-            
-            if (distance < 0.1f) {
-                position = targetPosition;
-                hasTarget = false;
-                isSprinting = false;
-            } else {
-                direction.x /= distance;
-                direction.z /= distance;
-                
-                // Apply Athletics modifier to speed
-                float athleticsModifier = skills.getSkill(SkillType::ATHLETICS).getModifier();
-                float currentSpeed = (isSprinting ? sprintSpeed : moveSpeed) * athleticsModifier;
-                position.x += direction.x * currentSpeed;
-                position.z += direction.z * currentSpeed;
-                position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
-            }
-        }
-        
-        // Always update Y position
-        position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f;
-        
-        // Calculate distance traveled and award Athletics XP
-        float dx = position.x - oldPosition.x;
-        float dz = position.z - oldPosition.z;
-        float distance = bx::sqrt(dx * dx + dz * dz);
-        
-        if (distance > 0.001f) { // Only if we actually moved
-            distanceTraveled += distance;
-            
-            // Award XP every unit of distance traveled
-            float xpPerUnit = isSprinting ? 2.0f : 0.5f; // More XP for running
-            if (distanceTraveled >= 1.0f) {
-                skills.getSkill(SkillType::ATHLETICS).addExperience(xpPerUnit * distanceTraveled);
-                distanceTraveled = 0.0f;
-            }
-        }
-    }
-    
-    void takeDamage(int damage, float currentTime) {
-        if (canTakeDamage(currentTime)) {
-            health = bx::max(0, health - damage);
-            lastDamageTime = currentTime;
-            hitFlashTimer = 0.2f; // Flash red for 0.2 seconds
-            std::cout << "Player took " << damage << " damage! Health: " << health << "/" << maxHealth << std::endl;
-            
-            if (health <= 0) {
-                std::cout << "Player defeated! Respawning..." << std::endl;
-                respawn();
-            }
-        }
-    }
-    
-    bool canTakeDamage(float currentTime) const {
-        return (currentTime - lastDamageTime) > 1.0f; // 1 second damage immunity
-    }
-    
-    void heal(int amount) {
-        health = bx::min(maxHealth, health + amount);
-        std::cout << "Player healed " << amount << " HP! Health: " << health << "/" << maxHealth << std::endl;
-    }
-    
-    void respawn() {
-        health = maxHealth;
-        position = {0.0f, 0.0f, 0.0f}; // Reset to spawn point
-        hasTarget = false;
-        lastDamageTime = 0.0f;
-    }
-    
-    void renderHealthBar() const {
-        // Calculate health percentage for color coding
-        float healthPercent = (float)health / (float)maxHealth;
-        
-        // Choose color based on health percentage
-        uint32_t healthColor;
-        if (healthPercent > 0.7f) healthColor = 0x0a; // Green
-        else if (healthPercent > 0.3f) healthColor = 0x0e; // Yellow  
-        else healthColor = 0x0c; // Red
-        
-        // Position in top-middle of screen (assuming 80 character width)
-        int centerX = 35; // Approximate center for "Health: 100/100"
-        int topY = 1;     // Top row
-        
-        bgfx::dbgTextPrintf(centerX, topY, healthColor, "Health: %d/%d", health, maxHealth);
-    }
-};
 
-// NPC update method implementation (needs Player to be fully defined)
-void NPC::update(float deltaTime, float terrainHeight, Player* player, float currentTime) {
-    if (!isActive) return;
-    
-    stateTimer += deltaTime;
-    
+// Player methods that need ChunkManager (implemented here due to dependencies)
+void Player::setTarget(float x, float z, const ChunkManager& chunkManager, bool sprint) {
+    targetPosition.x = x;
+    targetPosition.z = z;
+    targetPosition.y = chunkManager.getHeightAt(x, z) + size - 5.0f; // Account for terrain offset
+    hasTarget = true;
+    isSprinting = sprint;
+}
+
+void Player::update(const ChunkManager& chunkManager, float currentTime, float deltaTime) {
     // Update hit flash timer
     if (hitFlashTimer > 0) {
         hitFlashTimer -= deltaTime;
         if (hitFlashTimer < 0) hitFlashTimer = 0;
     }
     
-    // Check for combat initiation if hostile or if player is our combat target
-    if (player && (isHostile || combatTarget == player)) {
-        float dx = player->position.x - position.x;
-        float dz = player->position.z - position.z;
-        float distToPlayer = bx::sqrt(dx * dx + dz * dz);
+    // Track movement for Athletics XP
+    bx::Vec3 oldPosition = position;
+    
+    // Handle combat if we have a target
+    if (combatTarget && combatTarget->isActive) {
+        float dx = combatTarget->position.x - position.x;
+        float dz = combatTarget->position.z - position.z;
+        float distance = bx::sqrt(dx * dx + dz * dz);
         
-        // Check if we should enter combat
-        if (distToPlayer <= aggroRange && state != NPCState::IN_COMBAT && state != NPCState::FLEEING) {
-            if (type == NPCType::VILLAGER) {
-                // Villagers flee instead of fight
-                state = NPCState::FLEEING;
-                // Set flee target opposite of player
-                targetPosition.x = position.x - (dx / distToPlayer) * 15.0f;
-                targetPosition.z = position.z - (dz / distToPlayer) * 15.0f;
-            } else if (isHostile || combatTarget == player) {
-                // Enter combat mode
-                state = NPCState::APPROACHING_ENEMY;
-                combatTarget = player;
+        // Check if we're in combat range
+        if (distance <= 3.0f) {
+            inCombat = true;
+            hasTarget = false; // Stop normal movement
+            
+            // Maintain combat distance
+            if (distance > 2.5f) {
+                // Move closer
+                position.x += (dx / distance) * moveSpeed * 2.0f;
+                position.z += (dz / distance) * moveSpeed * 2.0f;
+            } else if (distance < 1.5f) {
+                // Back up
+                position.x -= (dx / distance) * moveSpeed;
+                position.z -= (dz / distance) * moveSpeed;
             }
-            stateTimer = 0.0f;
+            
+            // Attack if cooldown is ready
+            if (currentTime - lastAttackTime >= attackCooldown) {
+                // RNG for hit/miss
+                float hitRoll = (rand() % 100) / 100.0f;
+                float dodgeRoll = (rand() % 100) / 100.0f;
+                
+                if (hitRoll < hitChance && dodgeRoll > combatTarget->dodgeChance) {
+                    // Hit! Apply Unarmed skill modifier to damage
+                    float unarmedModifier = skills.getSkill(SkillType::UNARMED).getModifier();
+                    int actualDamage = (int)(attackDamage * unarmedModifier);
+                    combatTarget->takeDamage(actualDamage, currentTime);
+                    std::cout << "Player hits " << combatTarget->getTypeName() << " for " << actualDamage << " damage!" << std::endl;
+                    
+                    // Award Unarmed XP for successful hits
+                    skills.getSkill(SkillType::UNARMED).addExperience(5.0f);
+                } else {
+                    std::cout << "Player misses!" << std::endl;
+                    // Small XP even for misses to encourage practice
+                    skills.getSkill(SkillType::UNARMED).addExperience(1.0f);
+                }
+                
+                lastAttackTime = currentTime;
+            }
+        } else if (distance > 15.0f || !combatTarget->isActive) {
+            // Too far or target dead, exit combat
+            combatTarget = nullptr;
+            inCombat = false;
+        } else {
+            // Not in combat range yet - keep moving toward target
+            // Update target position in case NPC moved
+            targetPosition = combatTarget->position;
+            if (!hasTarget) {
+                hasTarget = true;
+                isSprinting = true; // Sprint to combat
+            }
+        }
+    } else {
+        inCombat = false;
+    }
+    
+    // Normal movement when not in active combat
+    if (hasTarget && !inCombat) {
+        bx::Vec3 direction = {
+            targetPosition.x - position.x,
+            0.0f,
+            targetPosition.z - position.z
+        };
+        
+        float distance = bx::sqrt(direction.x * direction.x + direction.z * direction.z);
+        
+        if (distance < 0.1f) {
+            position = targetPosition;
+            hasTarget = false;
+            isSprinting = false;
+        } else {
+            direction.x /= distance;
+            direction.z /= distance;
+            
+            // Apply Athletics modifier to speed
+            float athleticsModifier = skills.getSkill(SkillType::ATHLETICS).getModifier();
+            float currentSpeed = (isSprinting ? sprintSpeed : moveSpeed) * athleticsModifier;
+            position.x += direction.x * currentSpeed;
+            position.z += direction.z * currentSpeed;
+            position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f; // Account for terrain offset
         }
     }
     
-    switch (state) {
-        case NPCState::IDLE:
-            if (stateTimer >= maxStateTime) {
-                // Pick a new random target within reasonable distance
-                float angle = (bx::sin(position.x * 0.7f + stateTimer) * 0.5f + 0.5f) * 2.0f * bx::kPi;
-                float distance = 5.0f + (bx::cos(position.z * 0.8f + stateTimer) * 0.5f + 0.5f) * 10.0f; // 5-15 units
-                
-                targetPosition.x = position.x + bx::cos(angle) * distance;
-                targetPosition.z = position.z + bx::sin(angle) * distance;
-                
-                state = NPCState::MOVING_TO_TARGET;
-                stateTimer = 0.0f;
-            }
-            break;
-            
-        case NPCState::MOVING_TO_TARGET: {
-            // Move towards target
-            float dx = targetPosition.x - position.x;
-            float dz = targetPosition.z - position.z;
-            float distance = bx::sqrt(dx * dx + dz * dz);
-            
-            if (distance < 1.0f) {
-                // Reached target, go idle
-                state = NPCState::IDLE;
-                stateTimer = 0.0f;
-                velocity = {0.0f, 0.0f, 0.0f};
-            } else {
-                // Move towards target
-                velocity.x = (dx / distance) * speed;
-                velocity.z = (dz / distance) * speed;
-                
-                position.x += velocity.x * deltaTime;
-                position.z += velocity.z * deltaTime;
-                
-                // Update Y position to follow terrain
-                position.y = terrainHeight + size - 5.0f;
-            }
-            
-            // Timeout check - if moving too long, go idle
-            if (stateTimer > 15.0f) {
-                state = NPCState::IDLE;
-                stateTimer = 0.0f;
-                velocity = {0.0f, 0.0f, 0.0f};
-            }
-            break;
-        }
+    // Always update Y position
+    position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f;
+    
+    // Calculate distance traveled and award Athletics XP
+    float dx = position.x - oldPosition.x;
+    float dz = position.z - oldPosition.z;
+    float distance = bx::sqrt(dx * dx + dz * dz);
+    
+    if (distance > 0.001f) { // Only if we actually moved
+        distanceTraveled += distance;
         
-        case NPCState::APPROACHING_ENEMY: {
-            if (combatTarget) {
-                float dx = combatTarget->position.x - position.x;
-                float dz = combatTarget->position.z - position.z;
-                float distance = bx::sqrt(dx * dx + dz * dz);
-                
-                if (distance <= combatRange) {
-                    // Close enough, switch to combat
-                    state = NPCState::IN_COMBAT;
-                    velocity = {0.0f, 0.0f, 0.0f};
-                } else {
-                    // Move toward target
-                    velocity.x = (dx / distance) * speed * 1.5f; // Move faster when approaching combat
-                    velocity.z = (dz / distance) * speed * 1.5f;
-                    
-                    position.x += velocity.x * deltaTime;
-                    position.z += velocity.z * deltaTime;
-                    position.y = terrainHeight + size - 5.0f;
-                }
-                
-                // Give up if too far or taking too long
-                if (distance > aggroRange * 1.5f || stateTimer > 10.0f) {
-                    state = NPCState::IDLE;
-                    combatTarget = nullptr;
-                    isHostile = false;
-                    stateTimer = 0.0f;
-                }
-            }
-            break;
+        // Award XP every unit of distance traveled
+        float xpPerUnit = isSprinting ? 2.0f : 0.5f; // More XP for running
+        if (distanceTraveled >= 1.0f) {
+            skills.getSkill(SkillType::ATHLETICS).addExperience(xpPerUnit * distanceTraveled);
+            distanceTraveled = 0.0f;
         }
-        
-        case NPCState::IN_COMBAT: {
-            if (combatTarget) {
-                float dx = combatTarget->position.x - position.x;
-                float dz = combatTarget->position.z - position.z;
-                float distance = bx::sqrt(dx * dx + dz * dz);
-                
-                // Maintain combat distance
-                if (distance > combatRange + 0.5f) {
-                    // Too far, move closer
-                    velocity.x = (dx / distance) * speed;
-                    velocity.z = (dz / distance) * speed;
-                } else if (distance < combatRange - 0.5f) {
-                    // Too close, back up
-                    velocity.x = -(dx / distance) * speed * 0.5f;
-                    velocity.z = -(dz / distance) * speed * 0.5f;
-                } else {
-                    // Good distance, circle strafe
-                    float strafeAngle = currentTime * 0.5f;
-                    velocity.x = -dz / distance * speed * 0.3f * bx::sin(strafeAngle);
-                    velocity.z = dx / distance * speed * 0.3f * bx::sin(strafeAngle);
-                }
-                
-                position.x += velocity.x * deltaTime;
-                position.z += velocity.z * deltaTime;
-                position.y = terrainHeight + size - 5.0f;
-                
-                // Attack if cooldown is ready
-                if (currentTime - lastAttackTime >= attackCooldown) {
-                    // RNG for hit/miss
-                    float hitRoll = (rand() % 100) / 100.0f;
-                    float dodgeRoll = (rand() % 100) / 100.0f;
-                    
-                    if (hitRoll < hitChance && dodgeRoll > combatTarget->dodgeChance) {
-                        // Hit!
-                        combatTarget->takeDamage(attackDamage, currentTime);
-                        std::cout << getTypeName() << " hits player for " << attackDamage << " damage!" << std::endl;
-                    } else {
-                        std::cout << getTypeName() << " misses!" << std::endl;
-                    }
-                    
-                    lastAttackTime = currentTime;
-                }
-                
-                // Exit combat if target is too far or dead
-                if (distance > aggroRange * 1.5f || combatTarget->health <= 0) {
-                    state = NPCState::IDLE;
-                    combatTarget = nullptr;
-                    isHostile = false;
-                    stateTimer = 0.0f;
-                }
-            }
-            break;
-        }
-        
-        case NPCState::FLEEING: {
-            // Run away!
-            float dx = targetPosition.x - position.x;
-            float dz = targetPosition.z - position.z;
-            float distance = bx::sqrt(dx * dx + dz * dz);
-            
-            if (distance < 2.0f || stateTimer > 8.0f) {
-                // Reached safe distance or timeout
-                state = NPCState::IDLE;
-                stateTimer = 0.0f;
-                velocity = {0.0f, 0.0f, 0.0f};
-            } else {
-                // Sprint away
-                velocity.x = (dx / distance) * speed * 2.0f;
-                velocity.z = (dz / distance) * speed * 2.0f;
-                
-                position.x += velocity.x * deltaTime;
-                position.z += velocity.z * deltaTime;
-                position.y = terrainHeight + size - 5.0f;
-            }
-            break;
-        }
-            
-        case NPCState::WANDERING:
-            // Continuous random walk
-            if (stateTimer >= 1.0f) {
-                float angle = (bx::sin(position.x * 1.1f + stateTimer) + bx::cos(position.z * 0.9f + stateTimer)) * 0.5f;
-                velocity.x = bx::cos(angle) * speed * 0.5f;
-                velocity.z = bx::sin(angle) * speed * 0.5f;
-                stateTimer = 0.0f;
-            }
-            
-            position.x += velocity.x * deltaTime;
-            position.z += velocity.z * deltaTime;
-            
-            // Update Y position to follow terrain
-            position.y = terrainHeight + size - 5.0f;
-            break;
     }
 }
 
+// NPC update method implementation (needs Player to be fully defined)
+
 // Player inventory system
-struct PlayerInventory {
-    int copper = 0;
-    int iron = 0;
-    int stone = 0;
-    bool showOverlay = false;
-    
-    void addResource(ResourceType type, int amount) {
-        switch (type) {
-            case ResourceType::COPPER: copper += amount; break;
-            case ResourceType::IRON: iron += amount; break;
-            case ResourceType::STONE: stone += amount; break;
-        }
-        printInventory();
-    }
-    
-    void printInventory() const {
-        std::cout << "=== INVENTORY ===" << std::endl;
-        std::cout << "Copper: " << copper << std::endl;
-        std::cout << "Iron: " << iron << std::endl;
-        std::cout << "Stone: " << stone << std::endl;
-        std::cout << "=================" << std::endl;
-    }
-    
-    void toggleOverlay() {
-        showOverlay = !showOverlay;
-        std::cout << "Inventory overlay " << (showOverlay ? "enabled" : "disabled") << std::endl;
-    }
-    
-    void renderOverlay() const {
-        if (!showOverlay) return;
-        
-        // Position inventory in top left corner
-        int x = 1; // 1 character from left edge
-        int y = 1; // 1 character from top edge
-        
-        // Render inventory header
-        bgfx::dbgTextPrintf(x, y, 0x0f, "=== INVENTORY ===");
-        
-        // Render resource counts with color coding
-        bgfx::dbgTextPrintf(x, y + 1, 0x06, "Copper: %d", copper);  // Orange/brown color
-        bgfx::dbgTextPrintf(x, y + 2, 0x08, "Iron:   %d", iron);    // Gray color
-        bgfx::dbgTextPrintf(x, y + 3, 0x07, "Stone:  %d", stone);   // Light gray color
-        
-        // Render footer
-        bgfx::dbgTextPrintf(x, y + 4, 0x0f, "=================");
-        bgfx::dbgTextPrintf(x, y + 5, 0x0a, "Press I to close");    // Green color for instruction
-    }
-};
 
 // Ray casting for mouse picking
 struct Ray {

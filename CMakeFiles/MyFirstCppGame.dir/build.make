@@ -117,11 +117,56 @@ CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/adne/Desktop/dev/myfirstcplusplusgame/src/skills.cpp -o CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.s
 
+CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o: CMakeFiles/MyFirstCppGame.dir/flags.make
+CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o: src/resources.cpp
+CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o: CMakeFiles/MyFirstCppGame.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o -MF CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o.d -o CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o -c /Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.cpp
+
+CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.cpp > CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.i
+
+CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.cpp -o CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.s
+
+CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: CMakeFiles/MyFirstCppGame.dir/flags.make
+CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp
+CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: CMakeFiles/MyFirstCppGame.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o -MF CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o.d -o CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o -c /Users/adne/Desktop/dev/myfirstcplusplusgame/src/npcs.cpp
+
+CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/adne/Desktop/dev/myfirstcplusplusgame/src/npcs.cpp > CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.i
+
+CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/adne/Desktop/dev/myfirstcplusplusgame/src/npcs.cpp -o CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.s
+
+CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: CMakeFiles/MyFirstCppGame.dir/flags.make
+CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp
+CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: CMakeFiles/MyFirstCppGame.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o -MF CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o.d -o CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o -c /Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.cpp
+
+CMakeFiles/MyFirstCppGame.dir/src/player.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/MyFirstCppGame.dir/src/player.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.cpp > CMakeFiles/MyFirstCppGame.dir/src/player.cpp.i
+
+CMakeFiles/MyFirstCppGame.dir/src/player.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/MyFirstCppGame.dir/src/player.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.cpp -o CMakeFiles/MyFirstCppGame.dir/src/player.cpp.s
+
 # Object files for target MyFirstCppGame
 MyFirstCppGame_OBJECTS = \
 "CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o" \
 "CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o" \
-"CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o"
+"CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o" \
+"CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o" \
+"CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o" \
+"CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o"
 
 # External object files for target MyFirstCppGame
 MyFirstCppGame_EXTERNAL_OBJECTS =
@@ -129,6 +174,9 @@ MyFirstCppGame_EXTERNAL_OBJECTS =
 MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o
 MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o
 MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o
+MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o
+MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o
+MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o
 MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/build.make
 MyFirstCppGame: sdl_src/SDL-release-3.2.14/build/libSDL3.0.dylib
 MyFirstCppGame: deps/bgfx/.build/osx-arm64/bin/libbgfxRelease.a
@@ -136,7 +184,7 @@ MyFirstCppGame: deps/bgfx/.build/osx-arm64/bin/libbxRelease.a
 MyFirstCppGame: deps/bgfx/.build/osx-arm64/bin/libbimgRelease.a
 MyFirstCppGame: sdl_src/SDL-release-3.2.14/src/dynapi/SDL_dynapi.sym
 MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Linking CXX executable MyFirstCppGame"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/adne/Desktop/dev/myfirstcplusplusgame/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Linking CXX executable MyFirstCppGame"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/MyFirstCppGame.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

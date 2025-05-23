@@ -32,6 +32,9 @@ set(SOURCES
     src/main.cpp
     src/model.cpp
     src/skills.cpp
+    src/resources.cpp
+    src/npcs.cpp
+    src/player.cpp
 )
 
 # Create executable
