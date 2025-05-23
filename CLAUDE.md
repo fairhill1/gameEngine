@@ -1,27 +1,38 @@
 # MyFirstCppGame - 3D Rendering Engine
 
 ## Project Overview
-A cross-platform 3D game engine built in C++17 using BGFX renderer, SDL3 windowing, and supporting glTF model loading. Successfully refactored from 1378 to 698 lines in main.cpp with zero code duplication.
+A cross-platform 3D game engine built in C++17 using BGFX renderer, SDL3 windowing, and supporting glTF model loading. **Successfully refactored from monolithic 2528-line main.cpp into modular architecture with 5 extracted systems (~550 lines removed).**
 
-## Architecture
+## Modular Architecture (2025 Refactoring)
 
-### Core Systems
+### Extracted Systems
+- **Skills System**: `skills.h/cpp` - Player progression, XP tracking, and skill modifiers
+- **Resource System**: `resources.h/cpp` - Mining nodes, inventory management, and resource types
+- **NPC System**: `npcs.h/cpp` - AI entities with combat, movement, and health systems
+- **Player System**: `player.h/cpp` - Character movement, combat, skills integration, and health
+- **Camera System**: `camera.h/cpp` - WASD movement, mouse look, and view matrix management
+
+### Core Rendering Systems
 - **Rendering**: BGFX with Metal backend on macOS
 - **Windowing**: SDL3 for cross-platform window management  
-- **3D Models**: TinyGLTF for .glb/.gltf file loading
+- **3D Models**: TinyGLTF for .glb/.gltf file loading via `model.h/cpp`
 - **Textures**: STB_Image for PNG/JPEG loading with procedural generation
 - **Math**: BX math library for matrices and transformations
-- **Terrain**: Procedural chunk-based world generation with biomes
+- **Terrain**: Procedural chunk-based world generation with biomes (in main.cpp)
 
-### File Structure
+### Current File Structure
 ```
 src/
-├── main.cpp          # Application logic, rendering loop (698 lines)
-├── model.h           # Model loading interface
-├── model.cpp         # glTF/GLB model processing
+├── main.cpp          # Core game loop, terrain, rendering (1978 lines, down from 2528)
+├── model.h/cpp       # glTF/GLB model processing system
+├── skills.h/cpp      # Player progression and skill system
+├── resources.h/cpp   # Mining and inventory management system  
+├── npcs.h/cpp        # AI entity and combat system
+├── player.h/cpp      # Player character and movement system
+├── camera.h/cpp      # Camera controls and view management
 assets/               # Textures and 3D models
 shaders/metal/        # BGFX Metal shaders for macOS
-CMakeLists.txt        # Build configuration
+CMakeLists.txt        # Build configuration with all modules
 ```
 
 ## Build System
@@ -30,6 +41,41 @@ CMakeLists.txt        # Build configuration
 - **Platform**: macOS (arm64) with Metal renderer
 - **Build**: `make` in project root
 - **Run**: `./MyFirstCppGame`
+
+## 🏗️ Refactoring History (2025)
+
+### Phase 1: System Extraction
+**Goal**: Break monolithic main.cpp into modular, maintainable systems
+
+**Completed Extractions**:
+1. ✅ **Skills System** (85 lines) - Player progression with Athletics, Unarmed, and Mining skills
+2. ✅ **Resource System** (85 lines) - Mining nodes, inventory management, and resource types  
+3. ✅ **NPC System** (200 lines) - AI entities with combat, health, and autonomous behavior
+4. ✅ **Player System** (100 lines) - Character movement, combat integration, and health management
+5. ✅ **Camera System** (80 lines) - WASD movement, mouse look, and view matrix calculations
+
+**Total Impact**: ~550 lines extracted, main.cpp reduced from 2528 to 1978 lines (-22%)
+
+### Architectural Benefits
+- ✅ **Solved Circular Dependencies** - NPCs and Player can now reference each other properly
+- ✅ **Clean Separation of Concerns** - Each system has single responsibility
+- ✅ **Improved Maintainability** - Easier to modify and extend individual systems
+- ✅ **Better Testing** - Systems can be tested in isolation
+- ✅ **Reduced Compilation Time** - Only modified systems need recompilation
+
+### Phase 2: Remaining Targets
+**Next Extraction Candidates**:
+- **Terrain System** (~500 lines) - Largest remaining system with TerrainChunk and ChunkManager
+- **Debug System** (~50 lines) - FPS overlay and debug information
+- **Rendering Utilities** (~150 lines) - Texture loading and object rendering functions
+- **Vertex/Geometry Data** (~200 lines) - Static vertex arrays and primitive definitions
+- **Ray Casting System** (~50 lines) - Mouse-to-world coordinate conversion
+
+### Key Lessons Learned
+1. **Dependency Management** - Some methods must remain in main.cpp due to ChunkManager dependencies
+2. **Header Organization** - Forward declarations essential for breaking circular dependencies  
+3. **Interface Design** - Clean public APIs make extraction much easier
+4. **Incremental Approach** - Small, focused extractions reduce risk and complexity
 
 ## Current Rendering Objects
 1. **Colored Cube** (left) - Vertex color demonstration
@@ -59,20 +105,20 @@ CMakeLists.txt        # Build configuration
 
 ## Controls
 
-### Movement & Camera
-- **WASD** - Camera movement
-- **SHIFT + WASD** - Sprint mode
-- **Q/E** - Vertical movement
-- **Left Mouse + Drag** - Camera rotation
+### Movement & Camera (Camera System)
+- **WASD** - Camera movement (extracted to `camera.cpp`)
+- **SHIFT + WASD** - Sprint mode (3x speed multiplier)
+- **Q/E** - Vertical movement (up/down)
+- **Left Mouse + Drag** - Camera rotation with pitch clamping
 - **Right Mouse Click** - Move player to terrain location (ray casting)
 - **Double Right Click** - Sprint to terrain location
 - **1** - Jump to bird's eye view of player
 
 ### Game Systems
-- **SPACE** - Mine nearby resource nodes (3.0 unit range)
-- **I** - Toggle inventory overlay
+- **SPACE** - Mine nearby resource nodes (3.0 unit range, integrates with Skills System)
+- **I** - Toggle inventory overlay (Resource System)
 - **O** - Toggle debug overlay (FPS, chunks, player position)
-- **C** - Toggle skills overlay (shows Athletics and Unarmed skills)
+- **C** - Toggle skills overlay (Skills System - Athletics, Unarmed, Mining)
 
 ### Health & Combat Testing
 - **H** - Test player damage (20 HP, 1-second immunity)
@@ -832,7 +878,7 @@ make && ./MyFirstCppGame
 
 ## Recent Additions (2025)
 
-### ✅ Completed Features
+### ✅ Completed Game Features
 1. **Procedural Resource Generation System** - Biome-specific copper, iron, and stone nodes
 2. **Mining System** - Health-based resource depletion with SPACE key mining
 3. **Inventory System** - Visual overlay with I key toggle, real-time resource tracking
@@ -845,13 +891,22 @@ make && ./MyFirstCppGame
 10. **Combat Framework** - Damage/healing mechanics, hostility states, testing keys (H/J/K)
 11. **Player Skills System** - Athletics (movement XP), Unarmed (combat XP), and Mining (resource gathering XP) skills with level progression
 
+### 🏗️ Completed Architecture Refactoring
+1. **Skills System Extraction** - `skills.h/cpp` with player progression and XP tracking
+2. **Resource System Extraction** - `resources.h/cpp` with mining and inventory management  
+3. **NPC System Extraction** - `npcs.h/cpp` with AI entities and combat mechanics
+4. **Player System Extraction** - `player.h/cpp` with character movement and health
+5. **Camera System Extraction** - `camera.h/cpp` with WASD movement and mouse look
+6. **Dependency Resolution** - Solved circular dependencies between Player and NPC systems
+7. **Modular Build System** - Updated CMakeLists.txt to compile all extracted modules
+
 ### 🎯 Planned Next Features
-1. **Crafting System** - Convert resources into tools/items (hotkey: TAB)
-2. **Character Stats Screen** - Player progression tracking (hotkey: P)
-3. **Tool Durability** - Crafted mining tools with efficiency bonuses
-4. **NPC Interaction** - Trade with merchants, quests from villagers
-5. **Additional Skills** - Crafting, Trading, Stealth skills
-6. **Skill Persistence** - Save/load skill progress between sessions
+1. **Terrain System Extraction** - Move TerrainChunk and ChunkManager to `terrain.h/cpp` (~500 lines)
+2. **Debug System Extraction** - Move DebugOverlay to `debug.h/cpp` (~50 lines)
+3. **Rendering Utilities Extraction** - Move texture and rendering functions (~150 lines)
+4. **Crafting System** - Convert resources into tools/items (hotkey: TAB)
+5. **Character Stats Screen** - Player progression tracking (hotkey: P)
+6. **NPC Interaction** - Trade with merchants, quests from villagers
 
 ## Future Improvements
 1. Fix glTF buffer parsing for complex models

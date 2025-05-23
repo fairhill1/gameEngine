@@ -27,6 +27,8 @@
 
 - sealevel, rivers, lake
 - combat system
+- basic skills with text UI
+- some refactoring
 
 # 0.1 - 22.05.2025
 
