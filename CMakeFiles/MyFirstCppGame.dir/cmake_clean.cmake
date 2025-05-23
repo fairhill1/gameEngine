@@ -13,6 +13,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o.d"
   "CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o"
   "CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o.d"
+  "CMakeFiles/MyFirstCppGame.dir/src/ui.cpp.o"
+  "CMakeFiles/MyFirstCppGame.dir/src/ui.cpp.o.d"
   "MyFirstCppGame"
   "MyFirstCppGame.pdb"
 )

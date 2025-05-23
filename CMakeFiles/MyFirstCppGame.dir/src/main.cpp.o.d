@@ -988,4 +988,5 @@ CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o: \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/src/npcs.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.h \
-  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/camera.h
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/camera.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ui.h

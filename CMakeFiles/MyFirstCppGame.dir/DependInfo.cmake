@@ -15,6 +15,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.cpp" "CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o" "gcc" "CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o.d"
   "/Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.cpp" "CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o" "gcc" "CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o.d"
   "/Users/adne/Desktop/dev/myfirstcplusplusgame/src/skills.cpp" "CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o" "gcc" "CMakeFiles/MyFirstCppGame.dir/src/skills.cpp.o.d"
+  "/Users/adne/Desktop/dev/myfirstcplusplusgame/src/ui.cpp" "CMakeFiles/MyFirstCppGame.dir/src/ui.cpp.o" "gcc" "CMakeFiles/MyFirstCppGame.dir/src/ui.cpp.o.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

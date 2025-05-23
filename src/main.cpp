@@ -50,6 +50,7 @@ namespace tinygltf {
 #include "npcs.h"
 #include "player.h"
 #include "camera.h"
+#include "ui.h"
 
 // Window dimensions
 const int WINDOW_WIDTH = 800;
@@ -1958,6 +1959,13 @@ int main(int argc, char* argv[]) {
     camera.setToPlayerBirdsEye(player);
     std::cout << "Initial camera set to bird's eye view of player" << std::endl;
     
+    // UI system
+    UIRenderer uiRenderer;
+    if (!uiRenderer.init()) {
+        std::cerr << "Failed to initialize UI renderer!" << std::endl;
+        return 1;
+    }
+    
     // Mouse variables for terrain picking
     float pendingMouseX = 0.0f;
     float pendingMouseY = 0.0f;
@@ -2456,25 +2464,26 @@ int main(int argc, char* argv[]) {
             gardenLampModel.render(texProgram, s_texColor, modelMatrix);
         }
         
-        // Always clear debug text buffer and render active overlays
-        bgfx::dbgTextClear();
+        // UI system is now working! Test code removed.
         
-        // Calculate text grid size (BGFX debug text uses character grid)
-        int textCols = currentWidth / 8;  // Approximate character width
-        int textRows = currentHeight / 16; // Approximate character height
+        // Start UI rendering
+        uiRenderer.begin(currentWidth, currentHeight);
         
         // Render debug overlay if enabled
         if (debugOverlay.enabled) {
-            // Position FPS counter in top right corner
-            int fpsX = textCols - 18; // Leave more space for "FPS: 999 (99.9ms)"
-            if (fpsX < 0) fpsX = 0;
+            // Create debug panel background (bright red for testing) - using RGBA format
+            uiRenderer.panel(currentWidth - 220, 10, 210, 80, 0xFF0000FF); // Red with full alpha
             
-            // Render FPS counter with top padding
-            bgfx::dbgTextPrintf(fpsX, 1, 0x0f, "FPS: %3d (%4.1fms)", (int)debugOverlay.fps, debugOverlay.frameTime);
+            // Render FPS and debug info with custom UI
+            char fpsText[64];
+            snprintf(fpsText, sizeof(fpsText), "FPS: %3d (%4.1fms)", (int)debugOverlay.fps, debugOverlay.frameTime);
+            uiRenderer.text(currentWidth - 210, 25, fpsText, UIColors::TEXT_NORMAL);
             
-            // Optional: Add more debug info below FPS
-            bgfx::dbgTextPrintf(fpsX, 2, 0x0f, "Chunks: %d", (int)chunkManager.getLoadedChunkInfo().size());
-            bgfx::dbgTextPrintf(fpsX, 3, 0x0f, "Player: %.1f,%.1f", player.position.x, player.position.z);
+            snprintf(fpsText, sizeof(fpsText), "Chunks: %d", (int)chunkManager.getLoadedChunkInfo().size());
+            uiRenderer.text(currentWidth - 210, 45, fpsText, UIColors::TEXT_NORMAL);
+            
+            snprintf(fpsText, sizeof(fpsText), "Player: %.1f,%.1f", player.position.x, player.position.z);
+            uiRenderer.text(currentWidth - 210, 65, fpsText, UIColors::TEXT_NORMAL);
         }
         
         // Render inventory overlay if enabled
@@ -2486,18 +2495,19 @@ int main(int argc, char* argv[]) {
         // Render player health bar (always visible)
         player.renderHealthBar();
         
-        // Render hover info if available (right below health bar)
+        // Render hover info if available (centered at top)
         if (hasHoverInfo && !hoverInfo.empty()) {
-            // Position below health bar (health bar is at row 1)
-            int centerX = 35 - (hoverInfo.length() / 2); // Center the text
-            if (centerX < 0) centerX = 0;
-            bgfx::dbgTextPrintf(centerX, 2, 0x0f, "%s", hoverInfo.c_str());
+            uiRenderer.textCentered(currentWidth / 2, 30, hoverInfo.c_str(), UIColors::TEXT_HIGHLIGHT);
         }
+        
+        // End UI rendering
+        uiRenderer.end();
         
         bgfx::frame();
     }
     
     // Clean up resources
+    uiRenderer.destroy();
     bgfx::destroy(proceduralTexture);
     if (bgfx::isValid(pngTexture)) bgfx::destroy(pngTexture);
     bgfx::destroy(waterTexture);
