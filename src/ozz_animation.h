@@ -22,6 +22,9 @@ public:
     void updateAnimation(float deltaTime);
     void calculateBoneMatrices(float* outMatrices, size_t maxMatrices);
     
+    // Set inverse bind matrices for proper skinning
+    void setInverseBindMatrices(const float* inverseBindMatrices, int numJoints);
+    
     // Native ozz skinning
     bool skinVertices(const float* inPositions, float* outPositions,
                      const float* inNormals, float* outNormals,
@@ -45,6 +48,8 @@ private:
     // Runtime data
     ozz::vector<ozz::math::SoaTransform> localTransforms;
     ozz::vector<ozz::math::Float4x4> modelMatrices;
+    ozz::vector<ozz::math::Float4x4> skinMatrices;  // Final matrices for skinning (model * inverseBind)
+    ozz::vector<ozz::math::Float4x4> inverseBindMatrices; // Inverse bind matrices
     ozz::animation::SamplingJob::Context samplingContext;
     
     bool skeletonLoaded = false;

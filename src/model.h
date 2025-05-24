@@ -123,6 +123,9 @@ public:
     // Update model vertices using ozz native skinning
     void updateWithOzzSkinning(class OzzAnimationSystem& ozzSystem);
     
+    // Get inverse bind matrices for ozz skinning setup
+    bool getInverseBindMatrices(std::vector<float>& outMatrices) const;
+    
     // Animation support
     bool hasAnimations() const { return !animations.empty(); }
     const std::vector<AnimationClip>& getAnimations() const { return animations; }

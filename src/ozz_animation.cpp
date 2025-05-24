@@ -85,6 +85,19 @@ void OzzAnimationSystem::updateAnimation(float deltaTime) {
         std::cerr << "Local to model conversion failed" << std::endl;
         return;
     }
+    
+    // Compute skin matrices by multiplying model matrices with inverse bind matrices
+    if (inverseBindMatrices.size() == modelMatrices.size()) {
+        skinMatrices.resize(modelMatrices.size());
+        for (size_t i = 0; i < modelMatrices.size(); i++) {
+            skinMatrices[i] = modelMatrices[i] * inverseBindMatrices[i];
+        }
+        std::cout << "Using proper skin matrices (model * inverse bind)" << std::endl;
+    } else {
+        // If no inverse bind matrices, use model matrices directly
+        skinMatrices = modelMatrices;
+        std::cout << "Size mismatch - using model matrices directly (inv:" << inverseBindMatrices.size() << " vs model:" << modelMatrices.size() << ")" << std::endl;
+    }
 }
 
 void OzzAnimationSystem::calculateBoneMatrices(float* outMatrices, size_t maxMatrices) {
@@ -114,6 +127,35 @@ float OzzAnimationSystem::getAnimationDuration() const {
     return animationLoaded ? animation.duration() : 0.0f;
 }
 
+void OzzAnimationSystem::setInverseBindMatrices(const float* inverseBindMatrices, int numJoints) {
+    // Resize to match the skeleton size, padding with identity matrices if needed
+    int skeletonJoints = skeleton.num_joints();
+    this->inverseBindMatrices.resize(skeletonJoints);
+    
+    for (int i = 0; i < skeletonJoints; i++) {
+        ozz::math::Float4x4& ozzMatrix = this->inverseBindMatrices[i];
+        
+        if (i < numJoints) {
+            // Use provided inverse bind matrix
+            const float* matrix = inverseBindMatrices + (i * 16);
+            
+            // Convert from column-major float array to ozz::math::Float4x4
+            ozzMatrix.cols[0] = ozz::math::simd_float4::Load(matrix[0], matrix[1], matrix[2], matrix[3]);      // Column 0
+            ozzMatrix.cols[1] = ozz::math::simd_float4::Load(matrix[4], matrix[5], matrix[6], matrix[7]);      // Column 1
+            ozzMatrix.cols[2] = ozz::math::simd_float4::Load(matrix[8], matrix[9], matrix[10], matrix[11]);    // Column 2
+            ozzMatrix.cols[3] = ozz::math::simd_float4::Load(matrix[12], matrix[13], matrix[14], matrix[15]);  // Column 3
+        } else {
+            // Pad with identity matrix for missing joints
+            ozzMatrix.cols[0] = ozz::math::simd_float4::Load(1.0f, 0.0f, 0.0f, 0.0f);  // Column 0
+            ozzMatrix.cols[1] = ozz::math::simd_float4::Load(0.0f, 1.0f, 0.0f, 0.0f);  // Column 1
+            ozzMatrix.cols[2] = ozz::math::simd_float4::Load(0.0f, 0.0f, 1.0f, 0.0f);  // Column 2
+            ozzMatrix.cols[3] = ozz::math::simd_float4::Load(0.0f, 0.0f, 0.0f, 1.0f);  // Column 3
+        }
+    }
+    
+    std::cout << "Set " << numJoints << " inverse bind matrices, padded to " << skeletonJoints << " for ozz skeleton" << std::endl;
+}
+
 bool OzzAnimationSystem::skinVertices(const float* inPositions, float* outPositions,
                                      const float* inNormals, float* outNormals,
                                      const uint16_t* jointIndices, const float* jointWeights,
@@ -129,8 +171,8 @@ bool OzzAnimationSystem::skinVertices(const float* inPositions, float* outPositi
     skinningJob.vertex_count = vertexCount;
     skinningJob.influences_count = influencesCount;
     
-    // Set joint matrices (these should already include inverse bind matrices)
-    skinningJob.joint_matrices = ozz::make_span(modelMatrices);
+    // Set joint matrices (these are the final skin matrices: model * inverseBind)
+    skinningJob.joint_matrices = ozz::make_span(skinMatrices);
     
     // Set input positions and normals using pointer constructor
     skinningJob.in_positions = ozz::span<const float>(inPositions, vertexCount * 3);

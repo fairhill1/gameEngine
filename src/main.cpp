@@ -1874,6 +1874,23 @@ int main(int argc, char* argv[]) {
         std::cout << "Ozz animation loaded successfully!" << std::endl;
     }
     
+    // Extract and use REAL inverse bind matrices from the glTF model
+    std::vector<float> inverseBindMatrices;
+    if (mannequinModel.getInverseBindMatrices(inverseBindMatrices)) {
+        int numGltfJoints = inverseBindMatrices.size() / 16;
+        int numOzzJoints = ozzAnimSystem.getNumBones();
+        
+        std::cout << "Using REAL inverse bind matrices from glTF: " << numGltfJoints << " joints" << std::endl;
+        std::cout << "Ozz skeleton has: " << numOzzJoints << " joints" << std::endl;
+        
+        // Use the real inverse bind matrices from glTF
+        ozzAnimSystem.setInverseBindMatrices(inverseBindMatrices.data(), numGltfJoints);
+        std::cout << "Real inverse bind matrices set from glTF model!" << std::endl;
+    } else {
+        std::cerr << "Failed to extract inverse bind matrices from glTF model!" << std::endl;
+        std::cerr << "Animation will not work correctly without proper inverse bind matrices." << std::endl;
+    }
+    
     // Load shaders
     std::cout << "Loading shaders..." << std::endl;
     
@@ -2378,12 +2395,8 @@ int main(int argc, char* argv[]) {
                 if (time - lastUpdateTime >= updateInterval) {
                     int numBones = ozzAnimSystem.getNumBones();
                     static std::vector<float> boneMatrices;
-                    if (boneMatrices.size() != numBones * 16) {
-                        boneMatrices.resize(numBones * 16);
-                        std::cout << "Resized bone matrices for " << numBones << " bones" << std::endl;
-                    }
-                    
-                    ozzAnimSystem.calculateBoneMatrices(boneMatrices.data(), numBones);
+                    // Pure ozz-animation - no need for old bone matrix calculation
+                    std::cout << "Using pure ozz-animation system" << std::endl;
                     
                     // Debug: Check if we're calling the vertex transformation
                     std::cout << "Calling ozz native skinning with " << numBones << " bones" << std::endl;
@@ -2407,9 +2420,10 @@ int main(int argc, char* argv[]) {
             bx::mtxMul(scaleRotation, playerScale, playerRotation);
             bx::mtxMul(playerMatrix, scaleRotation, playerTranslation);
             
-            // Set default state for textured objects
-            uint64_t objState = BGFX_STATE_DEFAULT;
-            objState &= ~BGFX_STATE_CULL_MASK;
+            // Set state for animated textured objects - ensure proper face rendering
+            uint64_t objState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z 
+                              | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA;
+            // Disable backface culling for animated models to avoid winding issues
             bgfx::setState(objState);
             
             mannequinModel.render(texProgram, s_texColor, playerMatrix);

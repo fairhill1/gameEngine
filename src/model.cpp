@@ -1337,6 +1337,34 @@ void Model::updateWithOzzBoneMatrices(const float* boneMatrices, size_t boneCoun
     std::cout << "WARNING: updateWithOzzBoneMatrices is deprecated, use updateWithOzzSkinning" << std::endl;
 }
 
+bool Model::getInverseBindMatrices(std::vector<float>& outMatrices) const {
+    if (skins.empty()) {
+        return false;
+    }
+    
+    // Use the first skin (most models have only one skin)
+    const Skin& skin = skins[0];
+    outMatrices.clear();
+    outMatrices.reserve(skin.jointIndices.size() * 16);
+    
+    for (int jointIndex : skin.jointIndices) {
+        if (jointIndex < (int)nodes.size()) {
+            // Copy the 16 floats of the inverse bind matrix
+            for (int i = 0; i < 16; i++) {
+                outMatrices.push_back(nodes[jointIndex].bindMatrix[i]);
+            }
+        } else {
+            // Add identity matrix for invalid joint indices
+            for (int i = 0; i < 16; i++) {
+                outMatrices.push_back((i % 5 == 0) ? 1.0f : 0.0f); // Identity matrix pattern
+            }
+        }
+    }
+    
+    std::cout << "Extracted " << (outMatrices.size() / 16) << " inverse bind matrices" << std::endl;
+    return !outMatrices.empty();
+}
+
 void Model::updateWithOzzSkinning(OzzAnimationSystem& ozzSystem) {
     // Update all meshes that have animation data using ozz native skinning
     for (auto& mesh : meshes) {
@@ -1405,6 +1433,16 @@ void Model::updateWithOzzSkinning(OzzAnimationSystem& ozzSystem) {
             // Fall back to original vertices
             mesh.animatedVertices = mesh.originalVertices;
         } else {
+            // Debug: Check a few transformed positions
+            if (vertexCount > 0) {
+                std::cout << "SKINNING_DEBUG: Before: vertex 0 pos=(" << inPositions[0] << "," << inPositions[1] << "," << inPositions[2] << ")" << std::endl;
+                std::cout << "SKINNING_DEBUG: After: vertex 0 pos=(" << outPositions[0] << "," << outPositions[1] << "," << outPositions[2] << ")" << std::endl;
+                if (vertexCount > 100) {
+                    std::cout << "SKINNING_DEBUG: Before: vertex 100 pos=(" << inPositions[300] << "," << inPositions[301] << "," << inPositions[302] << ")" << std::endl;
+                    std::cout << "SKINNING_DEBUG: After: vertex 100 pos=(" << outPositions[300] << "," << outPositions[301] << "," << outPositions[302] << ")" << std::endl;
+                }
+            }
+            
             // Convert skinned results back to packed format
             for (size_t i = 0; i < vertexCount; i++) {
                 auto& animVertex = mesh.animatedVertices[i];
