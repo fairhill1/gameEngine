@@ -2306,45 +2306,60 @@ int main(int argc, char* argv[]) {
         // Render water with transparency enabled
         chunkManager.renderWater(texProgram, s_texColor, waterTexture);
         
-        // Render player as a colored cube
-        float playerMatrix[16], playerTranslation[16], playerScale[16];
-        bx::mtxScale(playerScale, player.size, player.size, player.size);
-        bx::mtxTranslate(playerTranslation, player.position.x, player.position.y, player.position.z);
-        bx::mtxMul(playerMatrix, playerScale, playerTranslation);
-        
-        // Set default state for objects
-        uint64_t objState = BGFX_STATE_DEFAULT;
-        objState &= ~BGFX_STATE_CULL_MASK;
-        bgfx::setState(objState);
-        
-        // Create player vertices with hit flash
-        if (player.hitFlashTimer > 0) {
-            PosColorVertex playerVertices[8];
-            // Calculate flash intensity
-            float flashIntensity = player.hitFlashTimer / 0.2f;
-            uint32_t baseColor = 0xffffffff; // White player
-            uint32_t r = 255;
-            uint32_t g = 255 * (1.0f - flashIntensity * 0.5f);
-            uint32_t b = 255 * (1.0f - flashIntensity * 0.8f);
-            uint32_t flashColor = 0xff000000 | (b << 16) | (g << 8) | r; // ABGR format
+        // Render player as mannequin model
+        if (mannequinModel.hasAnyMeshes()) {
+            float playerMatrix[16], playerTranslation[16], playerScale[16];
+            bx::mtxScale(playerScale, 1.0f, 1.0f, 1.0f);  // Default scale for mannequin
+            bx::mtxTranslate(playerTranslation, player.position.x, player.position.y, player.position.z);
+            bx::mtxMul(playerMatrix, playerScale, playerTranslation);
             
-            for (int i = 0; i < 8; i++) {
-                playerVertices[i] = cubeVertices[i];
-                playerVertices[i].abgr = flashColor;
-            }
-            
-            // Create transient vertex buffer
-            bgfx::TransientVertexBuffer tvb;
-            bgfx::allocTransientVertexBuffer(&tvb, 8, layout);
-            bx::memCopy(tvb.data, playerVertices, sizeof(playerVertices));
-            
-            bgfx::setVertexBuffer(0, &tvb);
-            bgfx::setIndexBuffer(ibh);
+            // Set default state for textured objects
+            uint64_t objState = BGFX_STATE_DEFAULT;
+            objState &= ~BGFX_STATE_CULL_MASK;
             bgfx::setState(objState);
-            bgfx::setTransform(playerMatrix);
-            bgfx::submit(0, program);
+            
+            mannequinModel.render(texProgram, s_texColor, playerMatrix);
         } else {
-            render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, playerMatrix);
+            // Fallback to cube if mannequin fails to load
+            float playerMatrix[16], playerTranslation[16], playerScale[16];
+            bx::mtxScale(playerScale, player.size, player.size, player.size);
+            bx::mtxTranslate(playerTranslation, player.position.x, player.position.y, player.position.z);
+            bx::mtxMul(playerMatrix, playerScale, playerTranslation);
+            
+            // Set default state for objects
+            uint64_t objState = BGFX_STATE_DEFAULT;
+            objState &= ~BGFX_STATE_CULL_MASK;
+            bgfx::setState(objState);
+            
+            // Create player vertices with hit flash
+            if (player.hitFlashTimer > 0) {
+                PosColorVertex playerVertices[8];
+                // Calculate flash intensity
+                float flashIntensity = player.hitFlashTimer / 0.2f;
+                uint32_t baseColor = 0xffffffff; // White player
+                uint32_t r = 255;
+                uint32_t g = 255 * (1.0f - flashIntensity * 0.5f);
+                uint32_t b = 255 * (1.0f - flashIntensity * 0.8f);
+                uint32_t flashColor = 0xff000000 | (b << 16) | (g << 8) | r; // ABGR format
+                
+                for (int i = 0; i < 8; i++) {
+                    playerVertices[i] = cubeVertices[i];
+                    playerVertices[i].abgr = flashColor;
+                }
+                
+                // Create transient vertex buffer
+                bgfx::TransientVertexBuffer tvb;
+                bgfx::allocTransientVertexBuffer(&tvb, 8, layout);
+                bx::memCopy(tvb.data, playerVertices, sizeof(playerVertices));
+                
+                bgfx::setVertexBuffer(0, &tvb);
+                bgfx::setIndexBuffer(ibh);
+                bgfx::setState(objState);
+                bgfx::setTransform(playerMatrix);
+                bgfx::submit(0, program);
+            } else {
+                render_object_at_position(vbh, ibh, program, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, playerMatrix);
+            }
         }
         
         // Render resource nodes
@@ -2425,7 +2440,9 @@ int main(int argc, char* argv[]) {
             // Set vertex buffer and render
             bgfx::setVertexBuffer(0, &tvb);
             bgfx::setIndexBuffer(ibh);
-            bgfx::setState(objState);
+            uint64_t npcState = BGFX_STATE_DEFAULT;
+            npcState &= ~BGFX_STATE_CULL_MASK;
+            bgfx::setState(npcState);
             bgfx::setTransform(npcMatrix);
             bgfx::submit(0, program);
         }
@@ -2475,20 +2492,6 @@ int main(int argc, char* argv[]) {
             gardenLampModel.render(texProgram, s_texColor, modelMatrix);
         }
         
-        // Render the Mannequin model near spawn
-        if (mannequinModel.hasAnyMeshes()) {
-            float modelMatrix[16], scale[16], temp[16];
-            bx::mtxIdentity(modelMatrix);
-            bx::mtxScale(scale, 1.0f, 1.0f, 1.0f);  // Human scale
-            bx::mtxRotateY(rotation, 0.0f);  // No rotation for mannequin
-            bx::mtxTranslate(translation, 5.0f, -1.0f, 5.0f);  // Near spawn position
-            
-            bx::mtxMul(temp, scale, rotation);
-            bx::mtxMul(modelMatrix, temp, translation);
-            
-            bgfx::setState(testCubeState);
-            mannequinModel.render(texProgram, s_texColor, modelMatrix);
-        }
         
         // UI system is now working! Test code removed.
         
