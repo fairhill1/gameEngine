@@ -27,7 +27,9 @@
 
 # 0.1.2
 
-- fi
+- fix texture mapping at least for player model
+- player orients
+- ozz animations implemented for player with basic walking, idle, running, punching
 
 # 0.1.1
 

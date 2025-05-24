@@ -33,47 +33,34 @@ bool OzzAnimationSystem::loadSkeleton(const std::string& skeletonPath) {
 }
 
 bool OzzAnimationSystem::loadAnimation(const std::string& animationPath) {
-    ozz::io::File file(animationPath.c_str(), "rb");
-    if (!file.opened()) {
-        std::cerr << "Failed to open animation file: " << animationPath << std::endl;
-        return false;
-    }
-    
-    ozz::io::IArchive archive(&file);
-    if (!archive.TestTag<ozz::animation::Animation>()) {
-        std::cerr << "Invalid animation file format" << std::endl;
-        return false;
-    }
-    
-    archive >> animation;
-    
-    animationLoaded = true;
-    std::cout << "Loaded animation with duration: " << animation.duration() << "s" << std::endl;
-    return true;
+    // Legacy method - use the named version instead
+    return loadAnimation("default", animationPath);
 }
 
 void OzzAnimationSystem::updateAnimation(float deltaTime) {
-    if (!isLoaded()) return;
+    if (!isLoaded() || !currentAnimation) return;
     
     // Update animation time
     animationTime += deltaTime;
     
     // Handle looping
-    if (looping && animationTime > animation.duration()) {
-        animationTime = fmod(animationTime, animation.duration());
+    if (looping && currentAnimation && animationTime > currentAnimation->duration()) {
+        animationTime = fmod(animationTime, currentAnimation->duration());
     }
     
     // Sample animation
     ozz::animation::SamplingJob samplingJob;
-    samplingJob.animation = &animation;
+    samplingJob.animation = currentAnimation;
     samplingJob.context = &samplingContext;
-    samplingJob.ratio = animationTime / animation.duration();
+    samplingJob.ratio = currentAnimation ? animationTime / currentAnimation->duration() : 0.0f;
     samplingJob.output = make_span(localTransforms);
     
     if (!samplingJob.Run()) {
         std::cerr << "Animation sampling failed" << std::endl;
         return;
     }
+    
+    // No root motion compensation needed - using in-place animations
     
     // Convert to model space matrices
     ozz::animation::LocalToModelJob localToModelJob;
@@ -140,7 +127,7 @@ int OzzAnimationSystem::getNumBones() const {
 }
 
 float OzzAnimationSystem::getAnimationDuration() const {
-    return animationLoaded ? animation.duration() : 0.0f;
+    return (animationLoaded && currentAnimation) ? currentAnimation->duration() : 0.0f;
 }
 
 std::vector<std::string> OzzAnimationSystem::getJointNames() const {
@@ -222,6 +209,47 @@ void OzzAnimationSystem::setInverseBindMatricesWithMapping(const float* gltfInve
     }
     
     std::cout << "Set " << mappedCount << "/" << numGltfJoints << " inverse bind matrices with proper joint mapping" << std::endl;
+}
+
+bool OzzAnimationSystem::loadAnimation(const std::string& name, const std::string& animationPath) {
+    auto newAnimation = std::make_unique<ozz::animation::Animation>();
+    
+    ozz::io::File file(animationPath.c_str(), "rb");
+    if (!file.opened()) {
+        std::cerr << "Failed to open animation file: " << animationPath << std::endl;
+        return false;
+    }
+    
+    ozz::io::IArchive archive(&file);
+    if (!archive.TestTag<ozz::animation::Animation>()) {
+        std::cerr << "Invalid animation file format: " << animationPath << std::endl;
+        return false;
+    }
+    
+    archive >> *newAnimation;
+    
+    std::cout << "Loaded animation '" << name << "' with duration: " << newAnimation->duration() << "s" << std::endl;
+    animations[name] = std::move(newAnimation);
+    
+    // If this is the first animation, make it current
+    if (currentAnimationName.empty()) {
+        setCurrentAnimation(name);
+        animationLoaded = true; // Set this to true when we have at least one animation
+    }
+    
+    return true;
+}
+
+void OzzAnimationSystem::setCurrentAnimation(const std::string& name) {
+    auto it = animations.find(name);
+    if (it != animations.end()) {
+        currentAnimation = it->second.get();
+        currentAnimationName = name;
+        animationTime = 0.0f; // Reset time when switching animations
+        std::cout << "Switched to animation: " << name << " (duration: " << currentAnimation->duration() << "s)" << std::endl;
+    } else {
+        std::cerr << "Animation '" << name << "' not found!" << std::endl;
+    }
 }
 
 bool OzzAnimationSystem::skinVertices(const float* inPositions, float* outPositions,

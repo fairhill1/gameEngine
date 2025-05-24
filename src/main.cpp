@@ -1868,10 +1868,32 @@ int main(int argc, char* argv[]) {
         std::cout << "Ozz skeleton loaded successfully!" << std::endl;
     }
     
-    if (!ozzAnimSystem.loadAnimation(animationPath)) {
-        std::cerr << "Failed to load ozz animation!" << std::endl;
+    // Load multiple animations
+    if (!ozzAnimSystem.loadAnimation("idle", animationPath)) {
+        std::cerr << "Failed to load idle animation!" << std::endl;
     } else {
-        std::cout << "Ozz animation loaded successfully!" << std::endl;
+        std::cout << "Idle animation loaded successfully!" << std::endl;
+    }
+    
+    const char* walkingAnimationPath = "build/assets/walking_inplace.ozz";
+    if (!ozzAnimSystem.loadAnimation("walking", walkingAnimationPath)) {
+        std::cerr << "Failed to load walking animation!" << std::endl;
+    } else {
+        std::cout << "Walking animation loaded successfully!" << std::endl;
+    }
+    
+    const char* runningAnimationPath = "build/assets/running_inplace.ozz";
+    if (!ozzAnimSystem.loadAnimation("running", runningAnimationPath)) {
+        std::cerr << "Failed to load running animation!" << std::endl;
+    } else {
+        std::cout << "Running animation loaded successfully!" << std::endl;
+    }
+    
+    const char* punchingAnimationPath = "build/assets/punching.ozz";
+    if (!ozzAnimSystem.loadAnimation("punching", punchingAnimationPath)) {
+        std::cerr << "Failed to load punching animation!" << std::endl;
+    } else {
+        std::cout << "Punching animation loaded successfully!" << std::endl;
     }
     
     // Extract and use REAL inverse bind matrices from the glTF model
@@ -2212,6 +2234,23 @@ int main(int argc, char* argv[]) {
                     std::cout << "C key pressed - toggling skills..." << std::endl;
                     player.skills.toggleOverlay();
                 }
+                else if (event.key.key == SDLK_V) {
+                    // Manually test animation switching (V for cycle animations)
+                    std::string currentAnim = ozzAnimSystem.getCurrentAnimationName();
+                    if (currentAnim == "idle") {
+                        ozzAnimSystem.setCurrentAnimation("walking");
+                        std::cout << "V key pressed - switched to walking animation!" << std::endl;
+                    } else if (currentAnim == "walking") {
+                        ozzAnimSystem.setCurrentAnimation("running");
+                        std::cout << "V key pressed - switched to running animation!" << std::endl;
+                    } else if (currentAnim == "running") {
+                        ozzAnimSystem.setCurrentAnimation("punching");
+                        std::cout << "V key pressed - switched to punching animation!" << std::endl;
+                    } else {
+                        ozzAnimSystem.setCurrentAnimation("idle");
+                        std::cout << "V key pressed - switched to idle animation!" << std::endl;
+                    }
+                }
             }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
                 int width = event.window.data1;
@@ -2351,14 +2390,33 @@ int main(int argc, char* argv[]) {
         // Update player and chunks
         player.update(chunkManager, time, deltaTime);
         
-        // Update player animation using ozz-animation
+        // Update player animation using ozz-animation with state-based switching
         if (player.animationLoop) {
+            // Determine desired animation based on player state
+            std::string desiredAnimation = "idle";
+            
+            if (player.inCombat) {
+                desiredAnimation = "punching"; // Use punching animation for combat
+            } else if (player.hasTarget) {
+                if (player.isSprinting) {
+                    desiredAnimation = "running"; // Use running animation for sprinting
+                } else {
+                    desiredAnimation = "walking"; // Use walking animation for normal movement
+                }
+            }
+            
+            // Switch animation if needed
+            if (ozzAnimSystem.getCurrentAnimationName() != desiredAnimation) {
+                ozzAnimSystem.setCurrentAnimation(desiredAnimation);
+            }
+            
             ozzAnimSystem.updateAnimation(deltaTime);
             
             // Debug: Print animation progress every 2 seconds
             static float lastDebugTime = 0.0f;
             if (time - lastDebugTime > 2.0f) {
-                std::cout << "Ozz Animation Time: " << ozzAnimSystem.getAnimationTime() 
+                std::cout << "Ozz Animation: " << ozzAnimSystem.getCurrentAnimationName() 
+                          << " Time: " << ozzAnimSystem.getAnimationTime() 
                           << "/" << ozzAnimSystem.getAnimationDuration() << "s" << std::endl;
                 lastDebugTime = time;
             }

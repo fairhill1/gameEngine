@@ -8,6 +8,8 @@
 #include <ozz/base/maths/soa_transform.h>
 #include <ozz/base/containers/vector.h>
 #include <string>
+#include <map>
+#include <memory>
 
 class OzzAnimationSystem {
 public:
@@ -17,6 +19,7 @@ public:
     // Load skeleton and animation from ozz files
     bool loadSkeleton(const std::string& skeletonPath);
     bool loadAnimation(const std::string& animationPath);
+    bool loadAnimation(const std::string& name, const std::string& animationPath);
     
     // Update animation and get bone matrices
     void updateAnimation(float deltaTime);
@@ -45,10 +48,14 @@ public:
     void setAnimationTime(float time) { animationTime = time; }
     float getAnimationTime() const { return animationTime; }
     void setLoop(bool loop) { looping = loop; }
+    void setCurrentAnimation(const std::string& name);
+    std::string getCurrentAnimationName() const { return currentAnimationName; }
     
 private:
     ozz::animation::Skeleton skeleton;
-    ozz::animation::Animation animation;
+    const ozz::animation::Animation* currentAnimation = nullptr;  // Pointer to current active animation
+    std::map<std::string, std::unique_ptr<ozz::animation::Animation>> animations;  // All loaded animations
+    std::string currentAnimationName = "";
     
     // Runtime data
     ozz::vector<ozz::math::SoaTransform> localTransforms;

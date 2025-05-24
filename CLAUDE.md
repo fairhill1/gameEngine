@@ -97,6 +97,7 @@ CMakeLists.txt        # Build configuration with all modules
 ```bash
 make                    # Build project
 ./MyFirstCppGame       # Run game
+deps/ozz-animation/build/src/animation/offline/gltf/gltf2ozz --file=your_animation.glb  # Convert glTF to ozz
 ```
 
 ### Key Dependencies
