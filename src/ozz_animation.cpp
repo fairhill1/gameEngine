@@ -1,6 +1,7 @@
 #include "ozz_animation.h"
 #include <ozz/base/io/stream.h>
 #include <ozz/base/io/archive.h>
+#include <ozz/base/span.h>
 #include <iostream>
 
 bool OzzAnimationSystem::loadSkeleton(const std::string& skeletonPath) {
@@ -111,4 +112,56 @@ int OzzAnimationSystem::getNumBones() const {
 
 float OzzAnimationSystem::getAnimationDuration() const {
     return animationLoaded ? animation.duration() : 0.0f;
+}
+
+bool OzzAnimationSystem::skinVertices(const float* inPositions, float* outPositions,
+                                     const float* inNormals, float* outNormals,
+                                     const uint16_t* jointIndices, const float* jointWeights,
+                                     int vertexCount, int influencesCount) {
+    if (!isLoaded()) {
+        return false;
+    }
+    
+    // Create ozz skinning job
+    ozz::geometry::SkinningJob skinningJob;
+    
+    // Set vertex count and influences
+    skinningJob.vertex_count = vertexCount;
+    skinningJob.influences_count = influencesCount;
+    
+    // Set joint matrices (these should already include inverse bind matrices)
+    skinningJob.joint_matrices = ozz::make_span(modelMatrices);
+    
+    // Set input positions and normals using pointer constructor
+    skinningJob.in_positions = ozz::span<const float>(inPositions, vertexCount * 3);
+    skinningJob.in_positions_stride = sizeof(float) * 3;
+    
+    if (inNormals && outNormals) {
+        skinningJob.in_normals = ozz::span<const float>(inNormals, vertexCount * 3);
+        skinningJob.in_normals_stride = sizeof(float) * 3;
+    }
+    
+    // Set joint indices and weights
+    skinningJob.joint_indices = ozz::span<const uint16_t>(jointIndices, vertexCount * influencesCount);
+    skinningJob.joint_indices_stride = sizeof(uint16_t) * influencesCount;
+    
+    skinningJob.joint_weights = ozz::span<const float>(jointWeights, vertexCount * (influencesCount - 1));
+    skinningJob.joint_weights_stride = sizeof(float) * (influencesCount - 1);
+    
+    // Set output positions and normals
+    skinningJob.out_positions = ozz::span<float>(outPositions, vertexCount * 3);
+    skinningJob.out_positions_stride = sizeof(float) * 3;
+    
+    if (inNormals && outNormals) {
+        skinningJob.out_normals = ozz::span<float>(outNormals, vertexCount * 3);
+        skinningJob.out_normals_stride = sizeof(float) * 3;
+    }
+    
+    // Validate and run the skinning job
+    if (!skinningJob.Validate()) {
+        std::cerr << "Ozz skinning job validation failed" << std::endl;
+        return false;
+    }
+    
+    return skinningJob.Run();
 }

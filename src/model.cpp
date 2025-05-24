@@ -1,4 +1,5 @@
 #include "model.h"
+#include "ozz_animation.h"
 #include <iostream>
 #include <algorithm>
 #include <bx/math.h>
@@ -1332,147 +1333,120 @@ void Model::updateAnimatedVertices(const std::string& animationName, float time)
 }
 
 void Model::updateWithOzzBoneMatrices(const float* boneMatrices, size_t boneCount) {
-    if (!boneMatrices || boneCount == 0) {
-        std::cout << "WARNING: No bone matrices provided for animation" << std::endl;
-        return;
-    }
-    
-    std::cout << "DEBUG: Processing " << meshes.size() << " meshes for animation" << std::endl;
-    
-    // Update all meshes that have animation data
+    // This method is deprecated - use updateWithOzzSkinning instead
+    std::cout << "WARNING: updateWithOzzBoneMatrices is deprecated, use updateWithOzzSkinning" << std::endl;
+}
+
+void Model::updateWithOzzSkinning(OzzAnimationSystem& ozzSystem) {
+    // Update all meshes that have animation data using ozz native skinning
     for (auto& mesh : meshes) {
-        std::cout << "DEBUG: Mesh hasAnimation=" << mesh.hasAnimation 
-                  << " originalVertices=" << mesh.originalVertices.size() 
-                  << " animatedVertices=" << mesh.animatedVertices.size() << std::endl;
-                  
         if (!mesh.hasAnimation || mesh.originalVertices.empty() || mesh.animatedVertices.empty()) {
-            std::cout << "DEBUG: Skipping mesh - hasAnimation=" << mesh.hasAnimation 
-                      << " originalEmpty=" << mesh.originalVertices.empty() 
-                      << " animatedEmpty=" << mesh.animatedVertices.empty() << std::endl;
             continue;
         }
         
         // Safety check: ensure animated vertices vector is the right size
         if (mesh.animatedVertices.size() != mesh.originalVertices.size()) {
-            std::cout << "ERROR: Animated vertices size mismatch! Original: " << mesh.originalVertices.size() 
-                      << " Animated: " << mesh.animatedVertices.size() << std::endl;
+            std::cout << "ERROR: Animated vertices size mismatch!" << std::endl;
             return;
         }
         
-        // Only print debug info once
-        static bool firstUpdate = true;
-        if (firstUpdate) {
-            std::cout << "Updating mesh with " << mesh.originalVertices.size() << " vertices using " << boneCount << " bones" << std::endl;
-            std::cout << "Processing max " << std::min(mesh.originalVertices.size(), size_t(2000)) << " vertices per frame" << std::endl;
-            firstUpdate = false;
-        }
+        const size_t vertexCount = mesh.originalVertices.size();
         
-        // Process vertices in small batches to reduce CPU load
-        const size_t BATCH_SIZE = 500; // Smaller batches for better performance
-        const size_t MAX_VERTICES_PER_FRAME = 2000; // Limit vertices processed per frame
+        // Extract data from packed vertex format for ozz skinning
+        std::vector<float> inPositions(vertexCount * 3);
+        std::vector<float> inNormals(vertexCount * 3);
+        std::vector<uint16_t> jointIndices(vertexCount * 4);
+        std::vector<float> jointWeights(vertexCount * 3); // ozz needs influences-1 weights
         
-        for (size_t startIdx = 0; startIdx < std::min(mesh.originalVertices.size(), MAX_VERTICES_PER_FRAME); startIdx += BATCH_SIZE) {
-            size_t endIdx = std::min({startIdx + BATCH_SIZE, mesh.originalVertices.size(), MAX_VERTICES_PER_FRAME});
+        std::vector<float> outPositions(vertexCount * 3);
+        std::vector<float> outNormals(vertexCount * 3);
+        
+        // Convert from packed format to separate arrays
+        for (size_t i = 0; i < vertexCount; i++) {
+            const auto& vertex = mesh.originalVertices[i];
             
-            // Transform vertices using ozz bone matrices
-            for (size_t i = startIdx; i < endIdx; ++i) {
-                if (i >= mesh.originalVertices.size() || i >= mesh.animatedVertices.size()) {
-                    std::cout << "ERROR: Vertex index " << i << " out of bounds!" << std::endl;
-                    continue;
-                }
-                
-                const auto& origVertex = mesh.originalVertices[i];
-                auto& animVertex = mesh.animatedVertices[i];
-                
-                // Start with the original vertex
-                animVertex = origVertex;
-                
-                // For now, try a simpler approach - just copy the original vertex without transformation
-                // This will keep the character in T-pose but verify the system is working
-                // TODO: Implement proper bone transformation once we debug the deformation
-                animVertex = origVertex;
-                continue;
-                
-                // Apply skinning transformation (disabled for now)
-                /*
-                float finalPosition[3] = {0.0f, 0.0f, 0.0f};
-                float finalNormal[3] = {0.0f, 0.0f, 0.0f};
-                
-                for (int j = 0; j < 4; ++j) {
-                    uint8_t boneIndex = origVertex.boneIndices[j];
-                    float weight = origVertex.boneWeights[j];
-                    
-                    if (weight == 0.0f || boneIndex >= boneCount) {
-                        if (boneIndex >= boneCount && weight > 0.0f) {
-                            std::cout << "WARNING: Bone index " << (int)boneIndex << " >= bone count " << boneCount << std::endl;
-                        }
-                        continue;
-                    }
-                    
-                    // Get bone matrix (16 floats in column-major order)
-                    const float* boneMatrix = &boneMatrices[boneIndex * 16];
-                    
-                    // Transform position
-                    float transformedPos[3];
-                    transformedPos[0] = boneMatrix[0] * origVertex.position[0] + boneMatrix[4] * origVertex.position[1] + boneMatrix[8] * origVertex.position[2] + boneMatrix[12];
-                    transformedPos[1] = boneMatrix[1] * origVertex.position[0] + boneMatrix[5] * origVertex.position[1] + boneMatrix[9] * origVertex.position[2] + boneMatrix[13];
-                    transformedPos[2] = boneMatrix[2] * origVertex.position[0] + boneMatrix[6] * origVertex.position[1] + boneMatrix[10] * origVertex.position[2] + boneMatrix[14];
-                    
-                    // Unpack normal from uint32_t (RGBA8 format)
-                    float origNormal[3];
-                    origNormal[0] = ((origVertex.normal >> 0) & 0xFF) / 255.0f * 2.0f - 1.0f;
-                    origNormal[1] = ((origVertex.normal >> 8) & 0xFF) / 255.0f * 2.0f - 1.0f;
-                    origNormal[2] = ((origVertex.normal >> 16) & 0xFF) / 255.0f * 2.0f - 1.0f;
-                    
-                    // Transform normal (no translation component)
-                    float transformedNormal[3];
-                    transformedNormal[0] = boneMatrix[0] * origNormal[0] + boneMatrix[4] * origNormal[1] + boneMatrix[8] * origNormal[2];
-                    transformedNormal[1] = boneMatrix[1] * origNormal[0] + boneMatrix[5] * origNormal[1] + boneMatrix[9] * origNormal[2];
-                    transformedNormal[2] = boneMatrix[2] * origNormal[0] + boneMatrix[6] * origNormal[1] + boneMatrix[10] * origNormal[2];
-                    
-                    // Accumulate weighted transformation
-                    finalPosition[0] += transformedPos[0] * weight;
-                    finalPosition[1] += transformedPos[1] * weight;
-                    finalPosition[2] += transformedPos[2] * weight;
-                    
-                    finalNormal[0] += transformedNormal[0] * weight;
-                    finalNormal[1] += transformedNormal[1] * weight;
-                    finalNormal[2] += transformedNormal[2] * weight;
-                }
-                
-                // Set final transformed vertex position
-                animVertex.position[0] = finalPosition[0];
-                animVertex.position[1] = finalPosition[1];
-                animVertex.position[2] = finalPosition[2];
-                
-                // Normalize final normal
-                float normalLength = sqrtf(finalNormal[0] * finalNormal[0] + 
-                                         finalNormal[1] * finalNormal[1] + 
-                                         finalNormal[2] * finalNormal[2]);
-                if (normalLength > 0.0f) {
-                    finalNormal[0] /= normalLength;
-                    finalNormal[1] /= normalLength;
-                    finalNormal[2] /= normalLength;
-                }
-                
-                // Pack final normal back to uint32_t (RGBA8 format)
-                uint8_t nx = (uint8_t)((finalNormal[0] * 0.5f + 0.5f) * 255.0f);
-                uint8_t ny = (uint8_t)((finalNormal[1] * 0.5f + 0.5f) * 255.0f);
-                uint8_t nz = (uint8_t)((finalNormal[2] * 0.5f + 0.5f) * 255.0f);
-                animVertex.normal = nx | (ny << 8) | (nz << 16) | (0xFF << 24);
-                */
-            }
+            // Extract positions
+            inPositions[i * 3 + 0] = vertex.position[0];
+            inPositions[i * 3 + 1] = vertex.position[1];
+            inPositions[i * 3 + 2] = vertex.position[2];
+            
+            // Extract and unpack normals
+            float normalX = ((vertex.normal >> 0) & 0xFF) / 255.0f * 2.0f - 1.0f;
+            float normalY = ((vertex.normal >> 8) & 0xFF) / 255.0f * 2.0f - 1.0f;
+            float normalZ = ((vertex.normal >> 16) & 0xFF) / 255.0f * 2.0f - 1.0f;
+            
+            inNormals[i * 3 + 0] = normalX;
+            inNormals[i * 3 + 1] = normalY;
+            inNormals[i * 3 + 2] = normalZ;
+            
+            // Extract joint indices (convert uint8_t to uint16_t)
+            jointIndices[i * 4 + 0] = static_cast<uint16_t>(vertex.boneIndices[0]);
+            jointIndices[i * 4 + 1] = static_cast<uint16_t>(vertex.boneIndices[1]);
+            jointIndices[i * 4 + 2] = static_cast<uint16_t>(vertex.boneIndices[2]);
+            jointIndices[i * 4 + 3] = static_cast<uint16_t>(vertex.boneIndices[3]);
+            
+            // Extract joint weights (ozz expects influences-1 weights, so only first 3)
+            jointWeights[i * 3 + 0] = vertex.boneWeights[0];
+            jointWeights[i * 3 + 1] = vertex.boneWeights[1];
+            jointWeights[i * 3 + 2] = vertex.boneWeights[2];
+            // Note: 4th weight is computed automatically by ozz as 1.0 - (sum of other weights)
         }
         
-        // Update the vertex buffer with transformed vertices
+        // Perform ozz native skinning
+        bool skinningSuccess = ozzSystem.skinVertices(
+            inPositions.data(), outPositions.data(),
+            inNormals.data(), outNormals.data(),
+            jointIndices.data(), jointWeights.data(),
+            static_cast<int>(vertexCount), 4 // 4 influences per vertex
+        );
+        
+        if (!skinningSuccess) {
+            std::cout << "ERROR: Ozz skinning failed, keeping original vertices" << std::endl;
+            // Fall back to original vertices
+            mesh.animatedVertices = mesh.originalVertices;
+        } else {
+            // Convert skinned results back to packed format
+            for (size_t i = 0; i < vertexCount; i++) {
+                auto& animVertex = mesh.animatedVertices[i];
+                const auto& origVertex = mesh.originalVertices[i];
+                
+                // Update positions with skinned results
+                animVertex.position[0] = outPositions[i * 3 + 0];
+                animVertex.position[1] = outPositions[i * 3 + 1];
+                animVertex.position[2] = outPositions[i * 3 + 2];
+                
+                // Update normals with skinned results and repack
+                float nx = outNormals[i * 3 + 0];
+                float ny = outNormals[i * 3 + 1];
+                float nz = outNormals[i * 3 + 2];
+                
+                // Pack normals back to uint32_t (RGBA8 format)
+                uint8_t packedNx = static_cast<uint8_t>((nx * 0.5f + 0.5f) * 255.0f);
+                uint8_t packedNy = static_cast<uint8_t>((ny * 0.5f + 0.5f) * 255.0f);
+                uint8_t packedNz = static_cast<uint8_t>((nz * 0.5f + 0.5f) * 255.0f);
+                animVertex.normal = packedNx | (packedNy << 8) | (packedNz << 16) | (0xFF << 24);
+                
+                // Keep original texture coordinates, bone data unchanged
+                animVertex.texcoord[0] = origVertex.texcoord[0];
+                animVertex.texcoord[1] = origVertex.texcoord[1];
+                for (int j = 0; j < 4; j++) {
+                    animVertex.boneIndices[j] = origVertex.boneIndices[j];
+                    animVertex.boneWeights[j] = origVertex.boneWeights[j];
+                }
+            }
+            
+            std::cout << "Ozz skinning completed successfully for " << vertexCount << " vertices" << std::endl;
+        }
+        
+        // Update the vertex buffer with transformed vertices using copy for safety
         if (mesh.vertexBuffer.idx != bgfx::kInvalidHandle) {
             bgfx::destroy(mesh.vertexBuffer);
         }
         
-        mesh.vertexBuffer = bgfx::createVertexBuffer(
-            bgfx::makeRef(mesh.animatedVertices.data(), 
-                         mesh.animatedVertices.size() * sizeof(PosNormalTexcoordVertex)),
-            PosNormalTexcoordVertex::ms_layout
+        const bgfx::Memory* vertexMem = bgfx::copy(
+            mesh.animatedVertices.data(), 
+            mesh.animatedVertices.size() * sizeof(PosNormalTexcoordVertex)
         );
+        mesh.vertexBuffer = bgfx::createVertexBuffer(vertexMem, PosNormalTexcoordVertex::ms_layout);
     }
 }

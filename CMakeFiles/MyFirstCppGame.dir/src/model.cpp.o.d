@@ -764,6 +764,36 @@ CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__iterator/erase_if_container.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__iterator/ranges_iterator_traits.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__node_handle \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ozz_animation.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/animation.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/export.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/io/archive_traits.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/platform.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cassert \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/assert.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_assert.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_static_assert.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/export.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/span.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/skeleton.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/sampling_job.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/local_to_model_job.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/geometry/runtime/export.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/soa_transform.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/soa_float.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/math_constant.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/simd_math.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/internal/simd_math_config.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/quaternion.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/math_ex.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/vec_float.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/transform.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/internal/simd_math_ref-inl.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/soa_quaternion.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/containers/vector.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/containers/std_allocator.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/memory/allocator.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/iostream \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/istream \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__ostream/basic_ostream.h \
@@ -840,9 +870,5 @@ CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__filesystem/u8path.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/stb/stb_image.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/tinygltf/tiny_gltf.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cassert \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/assert.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_assert.h \
-  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_static_assert.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/map \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tree

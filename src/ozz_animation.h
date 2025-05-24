@@ -4,6 +4,7 @@
 #include <ozz/animation/runtime/skeleton.h>
 #include <ozz/animation/runtime/sampling_job.h>
 #include <ozz/animation/runtime/local_to_model_job.h>
+#include <ozz/geometry/runtime/skinning_job.h>
 #include <ozz/base/maths/soa_transform.h>
 #include <ozz/base/containers/vector.h>
 #include <string>
@@ -20,6 +21,12 @@ public:
     // Update animation and get bone matrices
     void updateAnimation(float deltaTime);
     void calculateBoneMatrices(float* outMatrices, size_t maxMatrices);
+    
+    // Native ozz skinning
+    bool skinVertices(const float* inPositions, float* outPositions,
+                     const float* inNormals, float* outNormals,
+                     const uint16_t* jointIndices, const float* jointWeights,
+                     int vertexCount, int influencesCount);
     
     // Get info
     bool isLoaded() const { return skeletonLoaded && animationLoaded; }

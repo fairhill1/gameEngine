@@ -232,6 +232,7 @@ MyFirstCppGame: deps/bgfx/.build/osx-arm64/bin/libbxRelease.a
 MyFirstCppGame: deps/bgfx/.build/osx-arm64/bin/libbimgRelease.a
 MyFirstCppGame: deps/ozz-animation/build/src/animation/runtime/libozz_animation_r.a
 MyFirstCppGame: deps/ozz-animation/build/src/animation/offline/libozz_animation_offline_r.a
+MyFirstCppGame: deps/ozz-animation/build/src/geometry/runtime/libozz_geometry_r.a
 MyFirstCppGame: deps/ozz-animation/build/src/base/libozz_base_r.a
 MyFirstCppGame: sdl_src/SDL-release-3.2.14/src/dynapi/SDL_dynapi.sym
 MyFirstCppGame: CMakeFiles/MyFirstCppGame.dir/link.txt

@@ -64,6 +64,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${BGFX_DIR}/bgfx/.build/osx-arm64/bin/libbimgRelease.a
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/build/src/animation/runtime/libozz_animation_r.a
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/build/src/animation/offline/libozz_animation_offline_r.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/build/src/geometry/runtime/libozz_geometry_r.a
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/build/src/base/libozz_base_r.a
 )
 

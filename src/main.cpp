@@ -2386,12 +2386,12 @@ int main(int argc, char* argv[]) {
                     ozzAnimSystem.calculateBoneMatrices(boneMatrices.data(), numBones);
                     
                     // Debug: Check if we're calling the vertex transformation
-                    std::cout << "Calling updateWithOzzBoneMatrices with " << numBones << " bones" << std::endl;
+                    std::cout << "Calling ozz native skinning with " << numBones << " bones" << std::endl;
                     
-                    // Try the vertex transformation at lower frequency
-                    mannequinModel.updateWithOzzBoneMatrices(boneMatrices.data(), numBones);
+                    // Use ozz native skinning for proper animation
+                    mannequinModel.updateWithOzzSkinning(ozzAnimSystem);
                     
-                    std::cout << "Vertex transformation completed" << std::endl;
+                    std::cout << "Ozz skinning completed" << std::endl;
                     
                     lastUpdateTime = time;
                 }

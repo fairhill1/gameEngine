@@ -1827,6 +1827,8 @@ CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o: src/main.cpp \
   deps/ozz-animation/include/ozz/base/memory/allocator.h \
   deps/ozz-animation/include/ozz/base/platform.h \
   deps/ozz-animation/include/ozz/base/span.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/export.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h \
   deps/stb/stb_image.h \
   deps/tinygltf/json.hpp \
   deps/tinygltf/tiny_gltf.h \
@@ -2742,9 +2744,35 @@ CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o: src/model.cpp \
   deps/bx/include/bx/simd_t.h \
   deps/bx/include/bx/typetraits.h \
   deps/bx/include/bx/uint32_t.h \
+  deps/ozz-animation/include/ozz/animation/runtime/animation.h \
+  deps/ozz-animation/include/ozz/animation/runtime/export.h \
+  deps/ozz-animation/include/ozz/animation/runtime/local_to_model_job.h \
+  deps/ozz-animation/include/ozz/animation/runtime/sampling_job.h \
+  deps/ozz-animation/include/ozz/animation/runtime/skeleton.h \
+  deps/ozz-animation/include/ozz/base/containers/std_allocator.h \
+  deps/ozz-animation/include/ozz/base/containers/vector.h \
+  deps/ozz-animation/include/ozz/base/export.h \
+  deps/ozz-animation/include/ozz/base/io/archive_traits.h \
+  deps/ozz-animation/include/ozz/base/maths/internal/simd_math_config.h \
+  deps/ozz-animation/include/ozz/base/maths/internal/simd_math_ref-inl.h \
+  deps/ozz-animation/include/ozz/base/maths/math_constant.h \
+  deps/ozz-animation/include/ozz/base/maths/math_ex.h \
+  deps/ozz-animation/include/ozz/base/maths/quaternion.h \
+  deps/ozz-animation/include/ozz/base/maths/simd_math.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_float.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_quaternion.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_transform.h \
+  deps/ozz-animation/include/ozz/base/maths/transform.h \
+  deps/ozz-animation/include/ozz/base/maths/vec_float.h \
+  deps/ozz-animation/include/ozz/base/memory/allocator.h \
+  deps/ozz-animation/include/ozz/base/platform.h \
+  deps/ozz-animation/include/ozz/base/span.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/export.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h \
   deps/stb/stb_image.h \
   deps/tinygltf/tiny_gltf.h \
-  src/model.h
+  src/model.h \
+  src/ozz_animation.h
 
 CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/Availability.h \
@@ -4390,6 +4418,8 @@ CMakeFiles/MyFirstCppGame.dir/src/ozz_animation.cpp.o: src/ozz_animation.cpp \
   deps/ozz-animation/include/ozz/base/memory/allocator.h \
   deps/ozz-animation/include/ozz/base/platform.h \
   deps/ozz-animation/include/ozz/base/span.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/export.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h \
   src/ozz_animation.h
 
 CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
@@ -8174,6 +8204,8 @@ deps/bx/include/bx/bx.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_wchar.h:
 
+deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h:
+
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__numeric/exclusive_scan.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/xlocale/_ctype.h:
@@ -9333,6 +9365,8 @@ deps/ozz-animation/include/ozz/base/maths/internal/simd_math_ref-inl.h:
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__concepts/swappable.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__concepts/semiregular.h:
+
+deps/ozz-animation/include/ozz/geometry/runtime/export.h:
 
 /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/stack:
 

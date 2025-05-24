@@ -123,6 +123,8 @@ CMakeFiles/MyFirstCppGame.dir/src/ozz_animation.cpp.o: \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/skeleton.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/sampling_job.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/local_to_model_job.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/geometry/runtime/export.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/soa_transform.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/soa_float.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/math_constant.h \

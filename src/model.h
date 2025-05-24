@@ -120,6 +120,9 @@ public:
     // Update model vertices with ozz animation bone matrices  
     void updateWithOzzBoneMatrices(const float* boneMatrices, size_t boneCount);
     
+    // Update model vertices using ozz native skinning
+    void updateWithOzzSkinning(class OzzAnimationSystem& ozzSystem);
+    
     // Animation support
     bool hasAnimations() const { return !animations.empty(); }
     const std::vector<AnimationClip>& getAnimations() const { return animations; }
