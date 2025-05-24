@@ -1320,6 +1320,8 @@ void Player::update(const ChunkManager& chunkManager, float currentTime, float d
         if (rotation < -bx::kPi) rotation += 2.0f * bx::kPi;
     }
     
+    // Animation time will be updated in main loop with access to model
+    
     // Calculate distance traveled and award Athletics XP
     float dx = position.x - oldPosition.x;
     float dz = position.z - oldPosition.z;
@@ -1843,7 +1845,7 @@ int main(int argc, char* argv[]) {
     
     // Load the Mannequin GLB model
     std::cout << "Loading Mannequin GLB model..." << std::endl;
-    const char* mannequinPath = "build/assets/mannequin.glb";
+    const char* mannequinPath = "build/assets/mannequin_idle.glb";
     if (!mannequinModel.loadFromFile(mannequinPath)) {
         std::cerr << "Failed to load Mannequin model!" << std::endl;
     } else {
@@ -2226,6 +2228,33 @@ int main(int argc, char* argv[]) {
         
         // Update player and chunks
         player.update(chunkManager, time, deltaTime);
+        
+        // Update player animation
+        player.animationTime += deltaTime;
+        if (player.animationLoop && mannequinModel.hasAnimations()) {
+            const auto* anim = mannequinModel.getAnimation(player.currentAnimation);
+            if (anim && player.animationTime > anim->duration) {
+                player.animationTime = fmod(player.animationTime, anim->duration);
+            }
+            
+            // Debug: Print animation progress every 2 seconds
+            static float lastDebugTime = 0.0f;
+            if (time - lastDebugTime > 2.0f) {
+                std::cout << "Animation: " << player.currentAnimation << " Time: " << player.animationTime 
+                          << "/" << (anim ? anim->duration : 0.0f) << "s" << std::endl;
+                lastDebugTime = time;
+                
+                // Test bone matrix calculation
+                static std::vector<float*> boneMatrices;
+                mannequinModel.calculateBoneMatrices(player.currentAnimation, player.animationTime, boneMatrices);
+                std::cout << "  Calculated " << boneMatrices.size() << " bone matrices" << std::endl;
+                
+                // Test animated vertex update
+                mannequinModel.updateAnimatedVertices(player.currentAnimation, player.animationTime);
+                std::cout << "  Updated animated vertices" << std::endl;
+            }
+        }
+        
         chunkManager.updateChunksAroundPlayer(player.position.x, player.position.z);
         
         // Check for hover over objects

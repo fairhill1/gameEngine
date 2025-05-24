@@ -35,6 +35,43 @@ struct PosNormalTexcoordVertex {
     static bgfx::VertexLayout ms_layout;
 };
 
+// Animation keyframe data
+struct AnimationKeyframe {
+    float time;
+    std::vector<float> values; // Translation, rotation, or scale values
+};
+
+// Animation channel (position, rotation, scale for a node)
+struct AnimationChannel {
+    int nodeIndex;
+    std::string path; // "translation", "rotation", "scale"
+    std::vector<AnimationKeyframe> keyframes;
+};
+
+// Animation clip
+struct AnimationClip {
+    std::string name;
+    float duration;
+    std::vector<AnimationChannel> channels;
+};
+
+// Bone/Joint data
+struct Joint {
+    int index;
+    std::string name;
+    int parentIndex; // -1 for root
+    float bindMatrix[16]; // Inverse bind matrix
+    float localMatrix[16]; // Local transform matrix
+    float globalMatrix[16]; // Global transform matrix
+    std::vector<int> children;
+};
+
+// Skinning data
+struct Skin {
+    std::vector<Joint> joints;
+    std::vector<int> jointIndices; // Maps to joints array
+};
+
 // Simple mesh structure
 struct ModelMesh {
     bgfx::VertexBufferHandle vertexBuffer = BGFX_INVALID_HANDLE;
@@ -42,6 +79,11 @@ struct ModelMesh {
     int indexCount = 0;
     bgfx::TextureHandle texture = BGFX_INVALID_HANDLE;
     int primitiveType = 4; // TINYGLTF_MODE_TRIANGLES (4) is the default
+    
+    // For animation
+    std::vector<PosNormalTexcoordVertex> originalVertices; // Bind pose vertices
+    std::vector<PosNormalTexcoordVertex> animatedVertices; // After bone transforms
+    bool hasAnimation = false;
 };
 
 // Simplified model class focused on GLTF loading
@@ -71,6 +113,16 @@ public:
     // Set a fallback texture to use when meshes don't have their own texture
     void setFallbackTexture(bgfx::TextureHandle texture) { fallbackTexture = texture; }
     
+    // Animation support
+    bool hasAnimations() const { return !animations.empty(); }
+    const std::vector<AnimationClip>& getAnimations() const { return animations; }
+    const AnimationClip* getAnimation(const std::string& name) const;
+    
+    // Bone animation
+    void calculateBoneMatrices(const std::string& animationName, float time, std::vector<float*>& boneMatrices) const;
+    void updateNodeMatrix(int nodeIndex, const std::string& animationName, float time);
+    void updateAnimatedVertices(const std::string& animationName, float time);
+    
     // Direct binary mesh processing for testing
     bool processBinaryMesh(const std::vector<uint8_t>& data);
     
@@ -90,6 +142,13 @@ public:
     // Public fields for direct access
     std::vector<ModelMesh> meshes;
     bgfx::TextureHandle fallbackTexture = BGFX_INVALID_HANDLE;
+    
+    // Animation data
+    std::vector<AnimationClip> animations;
+    
+    // Skinning data
+    std::vector<Skin> skins;
+    std::vector<Joint> nodes; // All nodes (including non-joint nodes)
     
 private:
     

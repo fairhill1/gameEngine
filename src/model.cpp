@@ -671,6 +671,144 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
     }
     
     std::cout << "Loaded model with " << meshes.size() << " meshes" << std::endl;
+    
+    // Process animations
+    std::cout << "Processing " << gltfModel.animations.size() << " animations..." << std::endl;
+    for (const auto& gltfAnimation : gltfModel.animations) {
+        AnimationClip clip;
+        clip.name = gltfAnimation.name.empty() ? "Animation" : gltfAnimation.name;
+        clip.duration = 0.0f;
+        
+        std::cout << "  Loading animation: " << clip.name << std::endl;
+        
+        // Process each channel
+        for (const auto& channel : gltfAnimation.channels) {
+            const auto& sampler = gltfAnimation.samplers[channel.sampler];
+            
+            AnimationChannel animChannel;
+            animChannel.nodeIndex = channel.target_node;
+            animChannel.path = channel.target_path;
+            
+            // Get input (time) accessor
+            const auto& inputAccessor = gltfModel.accessors[sampler.input];
+            const auto& inputBufferView = gltfModel.bufferViews[inputAccessor.bufferView];
+            const auto& inputBuffer = gltfModel.buffers[inputBufferView.buffer];
+            
+            // Get output (values) accessor  
+            const auto& outputAccessor = gltfModel.accessors[sampler.output];
+            const auto& outputBufferView = gltfModel.bufferViews[outputAccessor.bufferView];
+            const auto& outputBuffer = gltfModel.buffers[outputBufferView.buffer];
+            
+            // Read time values
+            const float* timeData = reinterpret_cast<const float*>(
+                inputBuffer.data.data() + inputBufferView.byteOffset + inputAccessor.byteOffset);
+                
+            // Read output values
+            const float* valueData = reinterpret_cast<const float*>(
+                outputBuffer.data.data() + outputBufferView.byteOffset + outputAccessor.byteOffset);
+                
+            // Create keyframes
+            size_t numKeyframes = inputAccessor.count;
+            size_t valuesPerKeyframe = outputAccessor.count / numKeyframes;
+            
+            for (size_t i = 0; i < numKeyframes; i++) {
+                AnimationKeyframe keyframe;
+                keyframe.time = timeData[i];
+                
+                // Copy values for this keyframe
+                keyframe.values.resize(valuesPerKeyframe);
+                for (size_t j = 0; j < valuesPerKeyframe; j++) {
+                    keyframe.values[j] = valueData[i * valuesPerKeyframe + j];
+                }
+                
+                animChannel.keyframes.push_back(keyframe);
+                
+                // Update animation duration
+                clip.duration = std::max(clip.duration, keyframe.time);
+            }
+            
+            clip.channels.push_back(animChannel);
+        }
+        
+        animations.push_back(clip);
+        std::cout << "    Duration: " << clip.duration << "s, Channels: " << clip.channels.size() << std::endl;
+    }
+    
+    // Process nodes (including joints)
+    std::cout << "Processing " << gltfModel.nodes.size() << " nodes..." << std::endl;
+    nodes.resize(gltfModel.nodes.size());
+    for (size_t i = 0; i < gltfModel.nodes.size(); i++) {
+        const auto& gltfNode = gltfModel.nodes[i];
+        Joint& node = nodes[i];
+        
+        node.index = (int)i;
+        node.name = gltfNode.name.empty() ? ("Node_" + std::to_string(i)) : gltfNode.name;
+        node.parentIndex = -1; // Will be set when processing children
+        
+        // Initialize matrices to identity
+        bx::mtxIdentity(node.bindMatrix);
+        bx::mtxIdentity(node.localMatrix);
+        bx::mtxIdentity(node.globalMatrix);
+        
+        // Get local transform from node
+        if (!gltfNode.matrix.empty()) {
+            // Node has a matrix
+            for (int j = 0; j < 16; j++) {
+                node.localMatrix[j] = (float)gltfNode.matrix[j];
+            }
+        } else {
+            // For now, just use identity matrix
+            // TODO: Implement proper TRS composition with quaternions
+            bx::mtxIdentity(node.localMatrix);
+            
+            // Apply simple translation if available
+            if (!gltfNode.translation.empty()) {
+                bx::mtxTranslate(node.localMatrix, 
+                    (float)gltfNode.translation[0],
+                    (float)gltfNode.translation[1], 
+                    (float)gltfNode.translation[2]);
+            }
+        }
+        
+        // Set up parent-child relationships
+        for (int childIndex : gltfNode.children) {
+            node.children.push_back(childIndex);
+            if (childIndex < (int)nodes.size()) {
+                nodes[childIndex].parentIndex = (int)i;
+            }
+        }
+    }
+    
+    // Process skins
+    std::cout << "Processing " << gltfModel.skins.size() << " skins..." << std::endl;
+    for (const auto& gltfSkin : gltfModel.skins) {
+        Skin skin;
+        skin.jointIndices = gltfSkin.joints;
+        
+        // Process inverse bind matrices if available
+        if (gltfSkin.inverseBindMatrices >= 0) {
+            const auto& accessor = gltfModel.accessors[gltfSkin.inverseBindMatrices];
+            const auto& bufferView = gltfModel.bufferViews[accessor.bufferView];
+            const auto& buffer = gltfModel.buffers[bufferView.buffer];
+            
+            const float* matrices = reinterpret_cast<const float*>(
+                buffer.data.data() + bufferView.byteOffset + accessor.byteOffset);
+                
+            for (size_t i = 0; i < gltfSkin.joints.size(); i++) {
+                int jointIndex = gltfSkin.joints[i];
+                if (jointIndex < (int)nodes.size()) {
+                    // Copy inverse bind matrix
+                    for (int j = 0; j < 16; j++) {
+                        nodes[jointIndex].bindMatrix[j] = matrices[i * 16 + j];
+                    }
+                }
+            }
+        }
+        
+        skins.push_back(skin);
+        std::cout << "  Skin with " << gltfSkin.joints.size() << " joints" << std::endl;
+    }
+    
     return !meshes.empty();
 }
 
@@ -867,4 +1005,72 @@ void Model::unload() {
     // Clear data
     meshes.clear();
     loadedTextures.clear();
+    animations.clear();
+    nodes.clear();
+    skins.clear();
+}
+
+const AnimationClip* Model::getAnimation(const std::string& name) const {
+    for (const auto& animation : animations) {
+        if (animation.name == name) {
+            return &animation;
+        }
+    }
+    return nullptr;
+}
+
+void Model::calculateBoneMatrices(const std::string& animationName, float time, std::vector<float*>& boneMatrices) const {
+    const AnimationClip* anim = getAnimation(animationName);
+    if (!anim || skins.empty()) {
+        return;
+    }
+    
+    // For each joint in the first skin
+    const Skin& skin = skins[0];
+    boneMatrices.resize(skin.jointIndices.size());
+    
+    for (size_t i = 0; i < skin.jointIndices.size(); i++) {
+        int nodeIndex = skin.jointIndices[i];
+        if (nodeIndex >= (int)nodes.size()) continue;
+        
+        // Start with bind pose
+        const Joint& joint = nodes[nodeIndex];
+        float* matrix = boneMatrices[i];
+        if (!matrix) {
+            matrix = new float[16];
+            boneMatrices[i] = matrix;
+        }
+        
+        // For now, just use the bind matrix (this will show the T-pose)
+        // TODO: Apply animation transforms
+        for (int j = 0; j < 16; j++) {
+            matrix[j] = joint.bindMatrix[j];
+        }
+    }
+}
+
+void Model::updateNodeMatrix(int nodeIndex, const std::string& animationName, float time) {
+    // TODO: Implement animation transform interpolation
+    // This will update the local matrix of a node based on animation keyframes
+}
+
+void Model::updateAnimatedVertices(const std::string& animationName, float time) {
+    // For now, just copy original vertices to animated vertices
+    // This proves the system works even though it won't animate yet
+    for (auto& mesh : meshes) {
+        if (mesh.hasAnimation && !mesh.originalVertices.empty()) {
+            mesh.animatedVertices = mesh.originalVertices;
+            
+            // Update the vertex buffer with animated vertices
+            if (bgfx::isValid(mesh.vertexBuffer)) {
+                bgfx::destroy(mesh.vertexBuffer);
+            }
+            
+            mesh.vertexBuffer = bgfx::createVertexBuffer(
+                bgfx::makeRef(mesh.animatedVertices.data(), 
+                             mesh.animatedVertices.size() * sizeof(PosNormalTexcoordVertex)),
+                PosNormalTexcoordVertex::ms_layout
+            );
+        }
+    }
 }

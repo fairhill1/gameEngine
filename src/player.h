@@ -27,6 +27,11 @@ struct Player {
     float targetRotation;    // Target rotation for smooth transitions
     float rotationSpeed;     // How fast to rotate (radians per second)
     
+    // Animation state
+    std::string currentAnimation; // Current animation name
+    float animationTime;          // Current time in animation
+    bool animationLoop;           // Whether animation should loop
+    
     // Combat properties
     NPC* combatTarget;       // Current NPC we're fighting
     float lastAttackTime;

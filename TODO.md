@@ -8,6 +8,7 @@
 - crafting
 - camera follow player
 - trading
+- moneys
 - hunger
 - building
 - animations
