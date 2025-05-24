@@ -42,6 +42,73 @@ uint32_t Model::encodeNormalRgba8(float _x, float _y, float _z) {
     return xyz[0] | (xyz[1] << 8) | (xyz[2] << 16) | (xyz[3] << 24);
 }
 
+// Validation functions for debugging vertex data
+bool Model::validateVertexData(const std::vector<PosNormalTexcoordVertex>& vertices, const std::string& meshName) {
+    if (vertices.empty()) {
+        std::cerr << "VALIDATION: " << meshName << " has no vertices!" << std::endl;
+        return false;
+    }
+    
+    std::cout << "VALIDATION: " << meshName << " - " << vertices.size() << " vertices loaded" << std::endl;
+    
+    // Show first few vertices for debugging
+    size_t samplesToShow = std::min(vertices.size(), size_t(3));
+    for (size_t i = 0; i < samplesToShow; i++) {
+        std::cout << "  Vertex " << i << ": pos=(" 
+                  << vertices[i].position[0] << "," << vertices[i].position[1] << "," << vertices[i].position[2] 
+                  << ") normal=0x" << std::hex << vertices[i].normal << std::dec
+                  << " uv=(" << vertices[i].texcoord[0] << "," << vertices[i].texcoord[1] << ")" << std::endl;
+    }
+    
+    return validateNormals(vertices) && validateTextureCoordinates(vertices);
+}
+
+bool Model::validateTextureCoordinates(const std::vector<PosNormalTexcoordVertex>& vertices) {
+    int validUVs = 0;
+    int zeroUVs = 0;
+    
+    for (const auto& vertex : vertices) {
+        if (vertex.texcoord[0] != 0 || vertex.texcoord[1] != 0) {
+            validUVs++;
+        } else {
+            zeroUVs++;
+        }
+    }
+    
+    float uvRatio = float(validUVs) / vertices.size();
+    std::cout << "VALIDATION: UV coordinates - " << validUVs << " non-zero, " << zeroUVs << " zero (" 
+              << (uvRatio * 100.0f) << "% have UVs)" << std::endl;
+    
+    if (uvRatio < 0.1f) {
+        std::cerr << "WARNING: Very few vertices have texture coordinates!" << std::endl;
+    }
+    
+    return true;
+}
+
+bool Model::validateNormals(const std::vector<PosNormalTexcoordVertex>& vertices) {
+    int validNormals = 0;
+    int zeroNormals = 0;
+    
+    for (const auto& vertex : vertices) {
+        if (vertex.normal != 0) {
+            validNormals++;
+        } else {
+            zeroNormals++;
+        }
+    }
+    
+    float normalRatio = float(validNormals) / vertices.size();
+    std::cout << "VALIDATION: Normals - " << validNormals << " non-zero, " << zeroNormals << " zero (" 
+              << (normalRatio * 100.0f) << "% have normals)" << std::endl;
+    
+    if (normalRatio < 0.1f) {
+        std::cerr << "WARNING: Very few vertices have normals!" << std::endl;
+    }
+    
+    return true;
+}
+
 bool Model::loadFromFile(const char* filepath) {
     std::cout << "Loading model from: " << filepath << std::endl;
     
@@ -248,8 +315,9 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 vertices[i].position[0] = 0.0f;
                 vertices[i].position[1] = 0.0f;
                 vertices[i].position[2] = 0.0f;
-                vertices[i].texcoord[0] = 0.0f;
-                vertices[i].texcoord[1] = 0.0f;
+                vertices[i].normal = encodeNormalRgba8(0.0f, 1.0f, 0.0f); // Default up normal
+                vertices[i].texcoord[0] = 0; // int16_t default
+                vertices[i].texcoord[1] = 0; // int16_t default
             }
             
             // Extract position data from separate buffer view (tightly packed)
@@ -299,12 +367,42 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                            i, offset, positionBuffer.data.size());
                 }
                 
-                // Default texture coordinates
-                vertices[i].texcoord[0] = 0.0f;
-                vertices[i].texcoord[1] = 0.0f;
+                // Default texture coordinates (already set in initialization)
+                // vertices[i].texcoord[0] = 0; // Already set above
+                // vertices[i].texcoord[1] = 0; // Already set above
             }
             
-            // Skip normal processing for now
+            // Process normals if available
+            if (normalIt != primitive.attributes.end()) {
+                const tinygltf::Accessor& normalAccessor = gltfModel.accessors[normalIt->second];
+                const tinygltf::BufferView& normalView = gltfModel.bufferViews[normalAccessor.bufferView];
+                const tinygltf::Buffer& normalBuffer = gltfModel.buffers[normalView.buffer];
+                
+                fprintf(stderr, "NORMAL_DEBUG: Processing normals, count=%zu\n", normalAccessor.count);
+                
+                // For separate buffer views, normals are tightly packed (3 floats per vertex)
+                for (size_t i = 0; i < vertexCount && i < normalAccessor.count; i++) {
+                    size_t offset = normalView.byteOffset + normalAccessor.byteOffset + i * 12;
+                    
+                    // Bounds checking to prevent memory corruption
+                    if (offset + 12 <= normalBuffer.data.size()) {
+                        const float* normal = reinterpret_cast<const float*>(&normalBuffer.data[offset]);
+                        
+                        // Encode normal as packed RGBA8
+                        vertices[i].normal = encodeNormalRgba8(normal[0], normal[1], normal[2]);
+                        
+                        // Debug first few normals
+                        if (i < 3) {
+                            fprintf(stderr, "NORMAL_DEBUG: Vertex %zu: Normal=(%.6f, %.6f, %.6f) -> 0x%08x\n", 
+                                   i, normal[0], normal[1], normal[2], vertices[i].normal);
+                        }
+                    } else {
+                        fprintf(stderr, "WARNING: Normal buffer bounds exceeded at vertex %zu\n", i);
+                    }
+                }
+            } else {
+                fprintf(stderr, "NORMAL_DEBUG: No normals found, using defaults\n");
+            }
             
             // Extract texture coordinates from separate buffer view if available
             if (texcoordIt != primitive.attributes.end()) {
@@ -322,22 +420,30 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                     // Bounds checking to prevent memory corruption
                     if (offset + 8 <= texcoordBuffer.data.size()) {
                         const float* texcoord = reinterpret_cast<const float*>(&texcoordBuffer.data[offset]);
-                        vertices[i].texcoord[0] = texcoord[0];
-                        vertices[i].texcoord[1] = texcoord[1];
+                        
+                        // Convert float UV coordinates to int16_t normalized format
+                        // Map [0,1] to [0, 32767] for proper BGFX normalization (like bump example)
+                        // Flip V coordinate since glTF and BGFX may use different conventions
+                        vertices[i].texcoord[0] = int16_t(texcoord[0] * 32767.0f);
+                        vertices[i].texcoord[1] = int16_t((1.0f - texcoord[1]) * 32767.0f); // Flip V
                         
                         // Debug first few texture coordinates
                         if (i < 3) {
-                            fprintf(stderr, "TEXCOORD_DEBUG: Vertex %zu: UV=(%.6f, %.6f)\n", 
-                                   i, texcoord[0], texcoord[1]);
+                            fprintf(stderr, "TEXCOORD_DEBUG: Vertex %zu: UV=(%.6f, %.6f) -> (%d, %d)\n", 
+                                   i, texcoord[0], texcoord[1], vertices[i].texcoord[0], vertices[i].texcoord[1]);
                         }
                     } else {
                         // Safe fallback for out-of-bounds access
-                        vertices[i].texcoord[0] = 0.0f;
-                        vertices[i].texcoord[1] = 0.0f;
+                        vertices[i].texcoord[0] = 0;
+                        vertices[i].texcoord[1] = 0;
                         fprintf(stderr, "WARNING: Texture coordinate buffer bounds exceeded at vertex %zu\n", i);
                     }
                 }
             }
+            
+            // Validate vertex data before creating buffer
+            std::string meshName = mesh.name.empty() ? "Unknown" : mesh.name;
+            validateVertexData(vertices, meshName);
             
             // Create vertex buffer with proper memory copy to prevent corruption
             const bgfx::Memory* vertexMem = bgfx::copy(vertices.data(), vertices.size() * sizeof(PosNormalTexcoordVertex));
@@ -658,9 +764,9 @@ bool Model::processBinaryMesh(const std::vector<uint8_t>& data) {
         vertices[i].position[2] = positions[i*3+2] * scaleFactor;
         
         // Set default normal and uv
-        // No normal field anymore
-        vertices[i].texcoord[0] = 0.0f;
-        vertices[i].texcoord[1] = 0.0f;
+        vertices[i].normal = encodeNormalRgba8(0.0f, 1.0f, 0.0f); // Default up normal
+        vertices[i].texcoord[0] = 0; // int16_t default
+        vertices[i].texcoord[1] = 0; // int16_t default
     }
     
     // Create vertex buffer

@@ -9,7 +9,6 @@
 - hunger
 - building
 - animations
-- models
 - lightning
 - day/night cycles w sun & moon
 - savegame
@@ -18,8 +17,8 @@
 
 ## BUGS
 
-- NPC color change in combat not working
-- NPC walk into water
+- NPCs walk into water
+- texture mapping
 
 ## CHANGELOG
 

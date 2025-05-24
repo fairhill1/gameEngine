@@ -17,16 +17,18 @@ namespace tinygltf {
     class TinyGLTF;
 }
 
-// Simple vertex structure for models - matching textured cube format
+// Vertex structure matching BGFX examples for proper texture mapping
 struct PosNormalTexcoordVertex {
     float position[3];
-    float texcoord[2];  // Use float instead of int16
+    uint32_t normal;     // Packed normal (RGBA8 format)
+    int16_t texcoord[2]; // Normalized texture coordinates
 
     static void init() {
         ms_layout
             .begin()
             .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::Normal, 4, bgfx::AttribType::Uint8, true, true)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Int16, true, true)
             .end();
     }
 
@@ -78,6 +80,11 @@ private:
     
     // Helper function to convert floats to packed representation
     static uint32_t encodeNormalRgba8(float _x, float _y, float _z);
+    
+    // Validation functions for debugging
+    static bool validateVertexData(const std::vector<PosNormalTexcoordVertex>& vertices, const std::string& meshName);
+    static bool validateTextureCoordinates(const std::vector<PosNormalTexcoordVertex>& vertices);
+    static bool validateNormals(const std::vector<PosNormalTexcoordVertex>& vertices);
     
 public:
     // Public fields for direct access
