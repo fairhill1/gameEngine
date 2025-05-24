@@ -126,6 +126,9 @@ public:
     // Get inverse bind matrices for ozz skinning setup
     bool getInverseBindMatrices(std::vector<float>& outMatrices) const;
     
+    // Remap vertex bone indices from glTF space to ozz space
+    void remapBoneIndices(const std::vector<int>& gltfToOzzMapping);
+    
     // Animation support
     bool hasAnimations() const { return !animations.empty(); }
     const std::vector<AnimationClip>& getAnimations() const { return animations; }

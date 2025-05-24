@@ -1365,6 +1365,33 @@ bool Model::getInverseBindMatrices(std::vector<float>& outMatrices) const {
     return !outMatrices.empty();
 }
 
+void Model::remapBoneIndices(const std::vector<int>& gltfToOzzMapping) {
+    std::cout << "Remapping bone indices for " << meshes.size() << " meshes..." << std::endl;
+    
+    for (auto& mesh : meshes) {
+        if (!mesh.hasAnimation) continue;
+        
+        // Remap bone indices in both original and animated vertices
+        for (auto& vertex : mesh.originalVertices) {
+            for (int i = 0; i < 4; i++) {
+                uint8_t gltfIndex = vertex.boneIndices[i];
+                if (gltfIndex < gltfToOzzMapping.size() && gltfToOzzMapping[gltfIndex] != -1) {
+                    vertex.boneIndices[i] = static_cast<uint8_t>(gltfToOzzMapping[gltfIndex]);
+                } else {
+                    // Invalid mapping - set to joint 0 with zero weight
+                    vertex.boneIndices[i] = 0;
+                    vertex.boneWeights[i] = 0.0f;
+                }
+            }
+        }
+        
+        // Copy remapped indices to animated vertices
+        mesh.animatedVertices = mesh.originalVertices;
+        
+        std::cout << "Remapped bone indices for mesh with " << mesh.originalVertices.size() << " vertices" << std::endl;
+    }
+}
+
 void Model::updateWithOzzSkinning(OzzAnimationSystem& ozzSystem) {
     // Update all meshes that have animation data using ozz native skinning
     for (auto& mesh : meshes) {

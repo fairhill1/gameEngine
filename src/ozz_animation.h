@@ -24,6 +24,8 @@ public:
     
     // Set inverse bind matrices for proper skinning
     void setInverseBindMatrices(const float* inverseBindMatrices, int numJoints);
+    void setInverseBindMatricesWithMapping(const float* gltfInverseBindMatrices, int numGltfJoints, 
+                                          const std::vector<int>& gltfToOzzMapping);
     
     // Native ozz skinning
     bool skinVertices(const float* inPositions, float* outPositions,
@@ -35,6 +37,9 @@ public:
     bool isLoaded() const { return skeletonLoaded && animationLoaded; }
     int getNumBones() const;
     float getAnimationDuration() const;
+    
+    // Get joint names for mapping
+    std::vector<std::string> getJointNames() const;
     
     // Animation control
     void setAnimationTime(float time) { animationTime = time; }

@@ -1883,9 +1883,93 @@ int main(int argc, char* argv[]) {
         std::cout << "Using REAL inverse bind matrices from glTF: " << numGltfJoints << " joints" << std::endl;
         std::cout << "Ozz skeleton has: " << numOzzJoints << " joints" << std::endl;
         
-        // Use the real inverse bind matrices from glTF
-        ozzAnimSystem.setInverseBindMatrices(inverseBindMatrices.data(), numGltfJoints);
-        std::cout << "Real inverse bind matrices set from glTF model!" << std::endl;
+        // DEBUG: Print joint names to identify the mapping between glTF and ozz
+        std::cout << "\n=== JOINT MAPPING DEBUG ===" << std::endl;
+        std::cout << "glTF has " << numGltfJoints << " joints, ozz has " << numOzzJoints << " joints" << std::endl;
+        
+        // Print first few glTF joint names (these are ALL nodes, not just skin joints)
+        std::cout << "glTF ALL node names (first 10):" << std::endl;
+        for (int i = 0; i < std::min(10, (int)mannequinModel.nodes.size()); i++) {
+            std::cout << "  [" << i << "] " << mannequinModel.nodes[i].name << std::endl;
+        }
+        
+        // Print the actual skin joints (this is what the vertex bone indices refer to!)
+        std::cout << "glTF SKIN joint names (ALL " << numGltfJoints << " joints):" << std::endl;
+        if (!mannequinModel.skins.empty() && !mannequinModel.skins[0].jointIndices.empty()) {
+            const auto& skin = mannequinModel.skins[0];
+            for (int i = 0; i < (int)skin.jointIndices.size(); i++) {
+                int nodeIndex = skin.jointIndices[i];
+                if (nodeIndex < (int)mannequinModel.nodes.size()) {
+                    std::cout << "  [" << i << "] " << mannequinModel.nodes[nodeIndex].name << " (node " << nodeIndex << ")" << std::endl;
+                }
+            }
+        }
+        
+        // Print ozz joint names for comparison
+        auto ozzJointNames = ozzAnimSystem.getJointNames();
+        std::cout << "ozz joint names (ALL " << ozzJointNames.size() << " joints):" << std::endl;
+        for (int i = 0; i < (int)ozzJointNames.size(); i++) {
+            std::cout << "  [" << i << "] " << ozzJointNames[i] << std::endl;
+        }
+        
+        // Check if SKIN joint names match with ozz (they should since both came from same glTF)
+        bool foundMatches = false;
+        if (!mannequinModel.skins.empty()) {
+            const auto& skin = mannequinModel.skins[0];
+            for (int i = 0; i < std::min(5, (int)skin.jointIndices.size()); i++) {
+                int nodeIndex = skin.jointIndices[i];
+                if (nodeIndex < (int)mannequinModel.nodes.size()) {
+                    const std::string& gltfName = mannequinModel.nodes[nodeIndex].name;
+                    for (int j = 0; j < (int)ozzJointNames.size(); j++) {
+                        if (gltfName == ozzJointNames[j]) {
+                            std::cout << "MATCH: glTF skin[" << i << "] '" << gltfName << "' == ozz[" << j << "]" << std::endl;
+                            foundMatches = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (!foundMatches) {
+            std::cout << "ERROR: No matching joint names found between glTF and ozz!" << std::endl;
+        } else {
+            // Create complete joint mapping table from glTF SKIN indices to ozz indices
+            std::vector<int> gltfToOzzMapping(numGltfJoints, -1);
+            int mappedCount = 0;
+            
+            if (!mannequinModel.skins.empty()) {
+                const auto& skin = mannequinModel.skins[0];
+                for (int skinIdx = 0; skinIdx < (int)skin.jointIndices.size(); skinIdx++) {
+                    int nodeIndex = skin.jointIndices[skinIdx];
+                    if (nodeIndex < (int)mannequinModel.nodes.size()) {
+                        const std::string& gltfName = mannequinModel.nodes[nodeIndex].name;
+                        // Skip first 2 ozz joints (Armature, Ch36) - they're containers, not actual bones
+                        // Start from ozz[2] which is mixamorig1:Hips (the root bone)
+                        for (int ozzIdx = 2; ozzIdx < (int)ozzJointNames.size(); ozzIdx++) {
+                            if (gltfName == ozzJointNames[ozzIdx]) {
+                                gltfToOzzMapping[skinIdx] = ozzIdx;
+                                mappedCount++;
+                                std::cout << "CORRECTED MAPPING: glTF skin[" << skinIdx << "] '" << gltfName << "' -> ozz[" << ozzIdx << "]" << std::endl;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            std::cout << "Created joint mapping: " << mappedCount << "/" << numGltfJoints << " joints mapped" << std::endl;
+            
+            // Re-enable remapping with corrected 3-joint offset
+            mannequinModel.remapBoneIndices(gltfToOzzMapping);
+            std::cout << "Remapped vertex bone indices from glTF to ozz space!" << std::endl;
+            
+            // Use the real inverse bind matrices from glTF with proper joint mapping
+            ozzAnimSystem.setInverseBindMatricesWithMapping(inverseBindMatrices.data(), numGltfJoints, gltfToOzzMapping);
+            std::cout << "Real inverse bind matrices set from glTF model with joint mapping!" << std::endl;
+        }
+        
+        std::cout << "=== END JOINT DEBUG ===\n" << std::endl;
     } else {
         std::cerr << "Failed to extract inverse bind matrices from glTF model!" << std::endl;
         std::cerr << "Animation will not work correctly without proper inverse bind matrices." << std::endl;
@@ -2401,8 +2485,13 @@ int main(int argc, char* argv[]) {
                     // Debug: Check if we're calling the vertex transformation
                     std::cout << "Calling ozz native skinning with " << numBones << " bones" << std::endl;
                     
-                    // Use ozz native skinning for proper animation
-                    mannequinModel.updateWithOzzSkinning(ozzAnimSystem);
+                    // DEBUG: Test with NO animation to see bind pose
+                    static bool enableAnimation = true; // Re-enabled to debug animation system
+                    if (enableAnimation) {
+                        // Use ozz native skinning for proper animation
+                        mannequinModel.updateWithOzzSkinning(ozzAnimSystem);
+                    }
+                    // When enableAnimation = false, model should show in bind pose without deformation
                     
                     std::cout << "Ozz skinning completed" << std::endl;
                     

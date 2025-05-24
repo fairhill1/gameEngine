@@ -86,27 +86,43 @@ void OzzAnimationSystem::updateAnimation(float deltaTime) {
         return;
     }
     
-    // Compute skin matrices by multiplying model matrices with inverse bind matrices
-    if (inverseBindMatrices.size() == modelMatrices.size()) {
+    // DEBUG: Test with identity transforms to isolate joint ordering issue
+    static bool useIdentityTransforms = false; // Disabled - now implement joint mapping
+    
+    if (useIdentityTransforms) {
+        // Use identity transforms - this should show bind pose even with animation enabled
         skinMatrices.resize(modelMatrices.size());
         for (size_t i = 0; i < modelMatrices.size(); i++) {
-            skinMatrices[i] = modelMatrices[i] * inverseBindMatrices[i];
+            // Create identity matrix
+            skinMatrices[i].cols[0] = ozz::math::simd_float4::Load(1.0f, 0.0f, 0.0f, 0.0f);
+            skinMatrices[i].cols[1] = ozz::math::simd_float4::Load(0.0f, 1.0f, 0.0f, 0.0f);
+            skinMatrices[i].cols[2] = ozz::math::simd_float4::Load(0.0f, 0.0f, 1.0f, 0.0f);
+            skinMatrices[i].cols[3] = ozz::math::simd_float4::Load(0.0f, 0.0f, 0.0f, 1.0f);
         }
-        std::cout << "Using proper skin matrices (model * inverse bind)" << std::endl;
+        std::cout << "DEBUG: Using identity transforms to test joint mapping" << std::endl;
     } else {
-        // If no inverse bind matrices, use model matrices directly
-        skinMatrices = modelMatrices;
-        std::cout << "Size mismatch - using model matrices directly (inv:" << inverseBindMatrices.size() << " vs model:" << modelMatrices.size() << ")" << std::endl;
+        // Compute skin matrices by multiplying model matrices with inverse bind matrices
+        if (inverseBindMatrices.size() == modelMatrices.size()) {
+            skinMatrices.resize(modelMatrices.size());
+            for (size_t i = 0; i < modelMatrices.size(); i++) {
+                skinMatrices[i] = modelMatrices[i] * inverseBindMatrices[i];
+            }
+            std::cout << "Using proper skin matrices (model * inverse bind)" << std::endl;
+        } else {
+            // If no inverse bind matrices, use model matrices directly
+            skinMatrices = modelMatrices;
+            std::cout << "Size mismatch - using model matrices directly (inv:" << inverseBindMatrices.size() << " vs model:" << modelMatrices.size() << ")" << std::endl;
+        }
     }
 }
 
 void OzzAnimationSystem::calculateBoneMatrices(float* outMatrices, size_t maxMatrices) {
     if (!isLoaded()) return;
     
-    const size_t numMatrices = std::min(maxMatrices, static_cast<size_t>(modelMatrices.size()));
+    const size_t numMatrices = std::min(maxMatrices, static_cast<size_t>(skinMatrices.size()));
     
     for (size_t i = 0; i < numMatrices; i++) {
-        const ozz::math::Float4x4& matrix = modelMatrices[i];
+        const ozz::math::Float4x4& matrix = skinMatrices[i];
         
         // Copy matrix data (ozz uses column-major, BGFX expects column-major too)
         float* dest = outMatrices + (i * 16);
@@ -125,6 +141,20 @@ int OzzAnimationSystem::getNumBones() const {
 
 float OzzAnimationSystem::getAnimationDuration() const {
     return animationLoaded ? animation.duration() : 0.0f;
+}
+
+std::vector<std::string> OzzAnimationSystem::getJointNames() const {
+    std::vector<std::string> names;
+    if (!skeletonLoaded) return names;
+    
+    const auto& jointNames = skeleton.joint_names();
+    names.reserve(jointNames.size());
+    
+    for (const auto& name : jointNames) {
+        names.push_back(std::string(name));
+    }
+    
+    return names;
 }
 
 void OzzAnimationSystem::setInverseBindMatrices(const float* inverseBindMatrices, int numJoints) {
@@ -154,6 +184,44 @@ void OzzAnimationSystem::setInverseBindMatrices(const float* inverseBindMatrices
     }
     
     std::cout << "Set " << numJoints << " inverse bind matrices, padded to " << skeletonJoints << " for ozz skeleton" << std::endl;
+}
+
+void OzzAnimationSystem::setInverseBindMatricesWithMapping(const float* gltfInverseBindMatrices, int numGltfJoints, 
+                                                          const std::vector<int>& gltfToOzzMapping) {
+    // Resize to match the skeleton size, initialize with identity matrices
+    int skeletonJoints = skeleton.num_joints();
+    this->inverseBindMatrices.resize(skeletonJoints);
+    
+    // Initialize all matrices to identity
+    for (int i = 0; i < skeletonJoints; i++) {
+        ozz::math::Float4x4& ozzMatrix = this->inverseBindMatrices[i];
+        ozzMatrix.cols[0] = ozz::math::simd_float4::Load(1.0f, 0.0f, 0.0f, 0.0f);  // Column 0
+        ozzMatrix.cols[1] = ozz::math::simd_float4::Load(0.0f, 1.0f, 0.0f, 0.0f);  // Column 1
+        ozzMatrix.cols[2] = ozz::math::simd_float4::Load(0.0f, 0.0f, 1.0f, 0.0f);  // Column 2
+        ozzMatrix.cols[3] = ozz::math::simd_float4::Load(0.0f, 0.0f, 0.0f, 1.0f);  // Column 3
+    }
+    
+    // Map glTF inverse bind matrices to their corresponding ozz joint positions
+    int mappedCount = 0;
+    for (int gltfIdx = 0; gltfIdx < numGltfJoints && gltfIdx < (int)gltfToOzzMapping.size(); gltfIdx++) {
+        int ozzIdx = gltfToOzzMapping[gltfIdx];
+        if (ozzIdx >= 0 && ozzIdx < skeletonJoints) {
+            // Copy the glTF inverse bind matrix to the correct ozz joint position
+            const float* matrix = gltfInverseBindMatrices + (gltfIdx * 16);
+            ozz::math::Float4x4& ozzMatrix = this->inverseBindMatrices[ozzIdx];
+            
+            // Convert from column-major float array to ozz::math::Float4x4
+            ozzMatrix.cols[0] = ozz::math::simd_float4::Load(matrix[0], matrix[1], matrix[2], matrix[3]);      // Column 0
+            ozzMatrix.cols[1] = ozz::math::simd_float4::Load(matrix[4], matrix[5], matrix[6], matrix[7]);      // Column 1
+            ozzMatrix.cols[2] = ozz::math::simd_float4::Load(matrix[8], matrix[9], matrix[10], matrix[11]);    // Column 2
+            ozzMatrix.cols[3] = ozz::math::simd_float4::Load(matrix[12], matrix[13], matrix[14], matrix[15]);  // Column 3
+            
+            mappedCount++;
+            std::cout << "INVERSE_BIND_DEBUG: Mapped glTF[" << gltfIdx << "] inverse bind -> ozz[" << ozzIdx << "]" << std::endl;
+        }
+    }
+    
+    std::cout << "Set " << mappedCount << "/" << numGltfJoints << " inverse bind matrices with proper joint mapping" << std::endl;
 }
 
 bool OzzAnimationSystem::skinVertices(const float* inPositions, float* outPositions,
