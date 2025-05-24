@@ -1686,6 +1686,7 @@ int main(int argc, char* argv[]) {
     
     // Create models
     Model gardenLampModel;
+    Model mannequinModel;
     
     // Create window
     std::cout << "Creating window..." << std::endl;
@@ -1814,6 +1815,16 @@ int main(int argc, char* argv[]) {
     } else {
         std::cout << "Garden Lamp model loaded successfully!" << std::endl;
         gardenLampModel.setFallbackTexture(proceduralTexture);
+    }
+    
+    // Load the Mannequin GLB model
+    std::cout << "Loading Mannequin GLB model..." << std::endl;
+    const char* mannequinPath = "build/assets/mannequin.glb";
+    if (!mannequinModel.loadFromFile(mannequinPath)) {
+        std::cerr << "Failed to load Mannequin model!" << std::endl;
+    } else {
+        std::cout << "Mannequin model loaded successfully!" << std::endl;
+        mannequinModel.setFallbackTexture(proceduralTexture);
     }
     
     // Load shaders
@@ -2464,6 +2475,21 @@ int main(int argc, char* argv[]) {
             gardenLampModel.render(texProgram, s_texColor, modelMatrix);
         }
         
+        // Render the Mannequin model near spawn
+        if (mannequinModel.hasAnyMeshes()) {
+            float modelMatrix[16], scale[16], temp[16];
+            bx::mtxIdentity(modelMatrix);
+            bx::mtxScale(scale, 1.0f, 1.0f, 1.0f);  // Human scale
+            bx::mtxRotateY(rotation, 0.0f);  // No rotation for mannequin
+            bx::mtxTranslate(translation, 5.0f, -1.0f, 5.0f);  // Near spawn position
+            
+            bx::mtxMul(temp, scale, rotation);
+            bx::mtxMul(modelMatrix, temp, translation);
+            
+            bgfx::setState(testCubeState);
+            mannequinModel.render(texProgram, s_texColor, modelMatrix);
+        }
+        
         // UI system is now working! Test code removed.
         
         // Start UI rendering
@@ -2530,6 +2556,7 @@ int main(int argc, char* argv[]) {
     bgfx::destroy(texFsh);
     
     gardenLampModel.unload();
+    mannequinModel.unload();
     
     bgfx::shutdown();
     SDL_DestroyWindow(window);
