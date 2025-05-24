@@ -942,6 +942,41 @@ void Model::render(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform, 
     }
 }
 
+void Model::renderInstanced(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform, 
+                           bgfx::InstanceDataBuffer* instanceBuffer, uint32_t instanceCount) {
+    // No transform matrix needed for instanced rendering - handled by instances
+    
+    // Use default rendering state
+    uint64_t state = BGFX_STATE_DEFAULT;
+    // Disable backface culling to ensure all faces are visible
+    state &= ~BGFX_STATE_CULL_MASK;
+    
+    // Render all meshes with instancing
+    for (size_t i = 0; i < meshes.size(); i++) {
+        const ModelMesh& mesh = meshes[i];
+        
+        // Set texture
+        if (bgfx::isValid(mesh.texture)) {
+            bgfx::setTexture(0, texUniform, mesh.texture);
+        } else if (bgfx::isValid(fallbackTexture)) {
+            bgfx::setTexture(0, texUniform, fallbackTexture);
+        }
+        
+        // Set vertex and index buffers
+        bgfx::setVertexBuffer(0, mesh.vertexBuffer);
+        bgfx::setIndexBuffer(mesh.indexBuffer);
+        
+        // Set instance data buffer (proper BGFX instancing API)
+        bgfx::setInstanceDataBuffer(instanceBuffer);
+        
+        // Set state
+        bgfx::setState(state);
+        
+        // Submit instanced draw call
+        bgfx::submit(0, program);
+    }
+}
+
 bool Model::processBinaryMesh(const std::vector<uint8_t>& data) {
     // This function directly parses the GLTF binary buffer format
     // Note: The .bin file from glTF contains raw binary data without any headers

@@ -24,6 +24,7 @@ public:
     // Update animation and get bone matrices
     void updateAnimation(float deltaTime);
     void calculateBoneMatrices(float* outMatrices, size_t maxMatrices);
+    void getBoneMatrices(std::vector<float>& outMatrices);
     
     // Set inverse bind matrices for proper skinning
     void setInverseBindMatrices(const float* inverseBindMatrices, int numJoints);

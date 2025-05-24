@@ -108,6 +108,10 @@ public:
     // Render the model with the given program and transform
     void render(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform, float* modelMatrix);
     
+    // Render multiple instances of the model
+    void renderInstanced(bgfx::ProgramHandle program, bgfx::UniformHandle texUniform, 
+                        bgfx::InstanceDataBuffer* instanceBuffer, uint32_t instanceCount);
+    
     // Free resources
     void unload();
     

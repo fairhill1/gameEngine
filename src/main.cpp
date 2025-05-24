@@ -110,6 +110,8 @@ struct PosTexVertex {
     float u, v;
 };
 
+// Note: Removed InstanceData struct - using proper BGFX InstanceDataBuffer API instead
+
 // Colored cube vertices
 static PosColorVertex cubeVertices[] = {
     {-1.0f,  1.0f,  1.0f, 0xff0000ff}, // 0: Front-top-left (red)
@@ -1719,6 +1721,9 @@ int main(int argc, char* argv[]) {
     // Create animation system
     OzzAnimationSystem ozzAnimSystem;
     
+    // Instanced rendering program
+    bgfx::ProgramHandle npcInstancedProgram = BGFX_INVALID_HANDLE;
+    
     // Create window
     std::cout << "Creating window..." << std::endl;
     SDL_Window* window = SDL_CreateWindow(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
@@ -2045,30 +2050,38 @@ int main(int argc, char* argv[]) {
     // Load shaders
     std::cout << "Loading shaders..." << std::endl;
     
-    bgfx::ShaderHandle vsh, fsh, texVsh, texFsh;
+    bgfx::ShaderHandle vsh, fsh, texVsh, texFsh, npcInstancedVsh, npcInstancedFsh;
     
 #if BX_PLATFORM_OSX
     std::string vsPath = "shaders/metal/vs_cube.bin";
     std::string fsPath = "shaders/metal/fs_cube.bin";
     std::string texVsPath = "shaders/metal/vs_textured_cube.bin";
     std::string texFsPath = "shaders/metal/fs_textured_cube.bin";
+    std::string npcInstancedVsPath = "shaders/metal/vs_npc_instanced.bin";
+    std::string npcInstancedFsPath = "shaders/metal/fs_npc_instanced.bin";
     
     std::cout << "Looking for shaders at:" << std::endl;
     std::cout << "  Colored cube vertex: " << vsPath << std::endl;
     std::cout << "  Colored cube fragment: " << fsPath << std::endl;
     std::cout << "  Textured cube vertex: " << texVsPath << std::endl;
     std::cout << "  Textured cube fragment: " << texFsPath << std::endl;
+    std::cout << "  NPC instanced vertex: " << npcInstancedVsPath << std::endl;
+    std::cout << "  NPC instanced fragment: " << npcInstancedFsPath << std::endl;
     
     FILE* vsFile = fopen(vsPath.c_str(), "rb");
     FILE* fsFile = fopen(fsPath.c_str(), "rb");
     FILE* texVsFile = fopen(texVsPath.c_str(), "rb");
     FILE* texFsFile = fopen(texFsPath.c_str(), "rb");
+    FILE* npcInstancedVsFile = fopen(npcInstancedVsPath.c_str(), "rb");
+    FILE* npcInstancedFsFile = fopen(npcInstancedFsPath.c_str(), "rb");
     
-    if (!vsFile || !fsFile || !texVsFile || !texFsFile) {
+    if (!vsFile || !fsFile || !texVsFile || !texFsFile || !npcInstancedVsFile || !npcInstancedFsFile) {
         if (vsFile) fclose(vsFile);
         if (fsFile) fclose(fsFile);
         if (texVsFile) fclose(texVsFile);
         if (texFsFile) fclose(texFsFile);
+        if (npcInstancedVsFile) fclose(npcInstancedVsFile);
+        if (npcInstancedFsFile) fclose(npcInstancedFsFile);
         std::cerr << "Failed to open shader files!" << std::endl;
         return 1;
     }
@@ -2078,21 +2091,29 @@ int main(int argc, char* argv[]) {
     fseek(fsFile, 0, SEEK_END); long fsSize = ftell(fsFile); fseek(fsFile, 0, SEEK_SET);
     fseek(texVsFile, 0, SEEK_END); long texVsSize = ftell(texVsFile); fseek(texVsFile, 0, SEEK_SET);
     fseek(texFsFile, 0, SEEK_END); long texFsSize = ftell(texFsFile); fseek(texFsFile, 0, SEEK_SET);
+    fseek(npcInstancedVsFile, 0, SEEK_END); long npcInstancedVsSize = ftell(npcInstancedVsFile); fseek(npcInstancedVsFile, 0, SEEK_SET);
+    fseek(npcInstancedFsFile, 0, SEEK_END); long npcInstancedFsSize = ftell(npcInstancedFsFile); fseek(npcInstancedFsFile, 0, SEEK_SET);
     
     // Read the shader files
     const bgfx::Memory* vs_mem = bgfx::alloc(vsSize);
     const bgfx::Memory* fs_mem = bgfx::alloc(fsSize);
     const bgfx::Memory* texVs_mem = bgfx::alloc(texVsSize);
     const bgfx::Memory* texFs_mem = bgfx::alloc(texFsSize);
+    const bgfx::Memory* npcInstancedVs_mem = bgfx::alloc(npcInstancedVsSize);
+    const bgfx::Memory* npcInstancedFs_mem = bgfx::alloc(npcInstancedFsSize);
     
     size_t vsRead = fread(vs_mem->data, 1, vsSize, vsFile);
     size_t fsRead = fread(fs_mem->data, 1, fsSize, fsFile);
     size_t texVsRead = fread(texVs_mem->data, 1, texVsSize, texVsFile);
     size_t texFsRead = fread(texFs_mem->data, 1, texFsSize, texFsFile);
+    size_t npcInstancedVsRead = fread(npcInstancedVs_mem->data, 1, npcInstancedVsSize, npcInstancedVsFile);
+    size_t npcInstancedFsRead = fread(npcInstancedFs_mem->data, 1, npcInstancedFsSize, npcInstancedFsFile);
     
-    fclose(vsFile); fclose(fsFile); fclose(texVsFile); fclose(texFsFile);
+    fclose(vsFile); fclose(fsFile); fclose(texVsFile); fclose(texFsFile); 
+    fclose(npcInstancedVsFile); fclose(npcInstancedFsFile);
     
-    if (vsRead != vsSize || fsRead != fsSize || texVsRead != texVsSize || texFsRead != texFsSize) {
+    if (vsRead != vsSize || fsRead != fsSize || texVsRead != texVsSize || texFsRead != texFsSize || 
+        npcInstancedVsRead != npcInstancedVsSize || npcInstancedFsRead != npcInstancedFsSize) {
         std::cerr << "Failed to read shader files fully!" << std::endl;
         return 1;
     }
@@ -2102,8 +2123,11 @@ int main(int argc, char* argv[]) {
     fsh = bgfx::createShader(fs_mem);
     texVsh = bgfx::createShader(texVs_mem);
     texFsh = bgfx::createShader(texFs_mem);
+    npcInstancedVsh = bgfx::createShader(npcInstancedVs_mem);
+    npcInstancedFsh = bgfx::createShader(npcInstancedFs_mem);
     
-    if (!bgfx::isValid(vsh) || !bgfx::isValid(fsh) || !bgfx::isValid(texVsh) || !bgfx::isValid(texFsh)) {
+    if (!bgfx::isValid(vsh) || !bgfx::isValid(fsh) || !bgfx::isValid(texVsh) || !bgfx::isValid(texFsh) ||
+        !bgfx::isValid(npcInstancedVsh) || !bgfx::isValid(npcInstancedFsh)) {
         std::cerr << "Failed to create shader objects!" << std::endl;
         return 1;
     }
@@ -2116,8 +2140,9 @@ int main(int argc, char* argv[]) {
     std::cout << "Creating shader programs..." << std::endl;
     bgfx::ProgramHandle program = bgfx::createProgram(vsh, fsh, true);
     bgfx::ProgramHandle texProgram = bgfx::createProgram(texVsh, texFsh, true);
+    npcInstancedProgram = bgfx::createProgram(npcInstancedVsh, npcInstancedFsh, true);
     
-    if (!bgfx::isValid(program) || !bgfx::isValid(texProgram)) {
+    if (!bgfx::isValid(program) || !bgfx::isValid(texProgram) || !bgfx::isValid(npcInstancedProgram)) {
         std::cerr << "Failed to create shader programs!" << std::endl;
         return 1;
     }
@@ -2185,6 +2210,11 @@ int main(int argc, char* argv[]) {
     SDL_Event event;
     float time = 0.0f;
     
+    // Mining animation state
+    bool isMining = false;
+    float miningStartTime = 0.0f;
+    const float MINING_ANIMATION_DURATION = 1.0f; // 1 second punch animation
+    
     // Hover info system variables
     std::string hoverInfo = "";
     bool hasHoverInfo = false;
@@ -2238,6 +2268,13 @@ int main(int argc, char* argv[]) {
                     const float miningRange = 2.0f;
                     bool minedSomething = false;
                     
+                    // Switch to punching animation for mining
+                    ozzAnimSystem.setCurrentAnimation("punching");
+                    
+                    // Set mining state to control animation timing
+                    isMining = true;
+                    miningStartTime = time;
+                    
                     for (auto& node : resourceNodes) {
                         if (!node.canMine()) continue;
                         
@@ -2267,6 +2304,8 @@ int main(int argc, char* argv[]) {
                     if (!minedSomething) {
                         std::cout << "No resource nodes in range (need to be within " << miningRange << " units)" << std::endl;
                     }
+                    
+                    // Don't immediately return to idle - let the animation play
                 }
                 else if (event.key.key == SDLK_I) {
                     // Toggle inventory overlay
@@ -2447,22 +2486,25 @@ int main(int argc, char* argv[]) {
         
         // Update player animation using ozz-animation with state-based switching
         if (player.animationLoop) {
-            // Determine desired animation based on player state
-            std::string desiredAnimation = "idle";
-            
-            if (player.inCombat) {
-                desiredAnimation = "punching"; // Use punching animation for combat
-            } else if (player.hasTarget) {
-                if (player.isSprinting) {
-                    desiredAnimation = "running"; // Use running animation for sprinting
-                } else {
-                    desiredAnimation = "walking"; // Use walking animation for normal movement
+            // Don't override mining animation
+            if (!isMining) {
+                // Determine desired animation based on player state
+                std::string desiredAnimation = "idle";
+                
+                if (player.inCombat) {
+                    desiredAnimation = "punching"; // Use punching animation for combat
+                } else if (player.hasTarget) {
+                    if (player.isSprinting) {
+                        desiredAnimation = "running"; // Use running animation for sprinting
+                    } else {
+                        desiredAnimation = "walking"; // Use walking animation for normal movement
+                    }
                 }
-            }
-            
-            // Switch animation if needed
-            if (ozzAnimSystem.getCurrentAnimationName() != desiredAnimation) {
-                ozzAnimSystem.setCurrentAnimation(desiredAnimation);
+                
+                // Switch animation if needed
+                if (ozzAnimSystem.getCurrentAnimationName() != desiredAnimation) {
+                    ozzAnimSystem.setCurrentAnimation(desiredAnimation);
+                }
             }
             
             ozzAnimSystem.updateAnimation(deltaTime);
@@ -2599,6 +2641,12 @@ int main(int argc, char* argv[]) {
                     // Debug: Check if we're calling the vertex transformation
                     // std::cout << "Calling ozz native skinning with " << numBones << " bones" << std::endl;
                     
+                    // Check if mining animation should end
+                    if (isMining && (time - miningStartTime) >= MINING_ANIMATION_DURATION) {
+                        ozzAnimSystem.setCurrentAnimation("idle");
+                        isMining = false;
+                    }
+                    
                     // DEBUG: Test with NO animation to see bind pose
                     static bool enableAnimation = true; // Re-enabled to debug animation system
                     if (enableAnimation) {
@@ -2710,38 +2758,82 @@ int main(int argc, char* argv[]) {
         static int globalFrameCounter = 0;
         globalFrameCounter++;
         
-        for (auto& npcPtr : npcs) {
-            if (!npcPtr || !npcPtr->isActive) continue;
-            auto& npc = *npcPtr;
-            
-            // Update NPC AI
-            float npcTerrainHeight = chunkManager.getHeightAt(npc.position.x, npc.position.z);
-            npc.update(deltaTime, npcTerrainHeight, &player, time);
-            npc.updateHealthColor(); // Ensure color is updated for flash effect
-            
-            // Render NPC mannequin model
-            float npcMatrix[16], npcTranslation[16], npcScale[16];
-            bx::mtxScale(npcScale, npc.size, npc.size, npc.size);
-            bx::mtxTranslate(npcTranslation, npc.position.x, npc.position.y, npc.position.z);
-            bx::mtxMul(npcMatrix, npcScale, npcTranslation);
-            
-            // Animation LOD: Only animate nearby NPCs, and skip frames for performance
-            float distanceToCamera = bx::length(bx::sub(npc.position, camera.position));
-            const float ANIMATION_DISTANCE = 50.0f; // Only animate NPCs within 50 units
-            bool shouldAnimate = (distanceToCamera < ANIMATION_DISTANCE) && 
-                               (globalFrameCounter % 2 == 0); // Update every 2nd frame
-            
-            if (npc.ozzAnimSystem.isLoaded() && shouldAnimate) {
-                sharedNPCModel.updateWithOzzSkinning(npc.ozzAnimSystem);
+        // === GPU INSTANCED NPC RENDERING ===
+        // Use proper BGFX instancing like examples/05-instancing
+        if (npcs.size() > 0) {
+            // Update NPCs first (without rendering)
+            for (auto& npcPtr : npcs) {
+                if (!npcPtr || !npcPtr->isActive) continue;
+                auto& npc = *npcPtr;
+                
+                // Update NPC AI
+                float npcTerrainHeight = chunkManager.getHeightAt(npc.position.x, npc.position.z);
+                npc.update(deltaTime, npcTerrainHeight, &player, time);
+                npc.updateHealthColor();
+                
+                // Update NPC animation time
+                if (npc.ozzAnimSystem.isLoaded()) {
+                    npc.ozzAnimSystem.updateAnimation(deltaTime);
+                }
             }
-            // Distant/skipped NPCs use the model in its last animated state
             
-            // Set state for animated textured objects
-            uint64_t objState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z 
-                              | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA;
-            bgfx::setState(objState);
+            // Prepare instanced rendering data
+            const uint16_t instanceStride = 64; // 64 bytes for 4x4 matrix (no extra color data for now)
+            uint32_t totalNPCs = 0;
             
-            sharedNPCModel.render(texProgram, s_texColor, npcMatrix);
+            // Count active NPCs
+            for (auto& npcPtr : npcs) {
+                if (npcPtr && npcPtr->isActive) totalNPCs++;
+            }
+            
+            if (totalNPCs > 0) {
+                // Get available instance buffer space
+                uint32_t drawnNPCs = bgfx::getAvailInstanceDataBuffer(totalNPCs, instanceStride);
+                
+                if (drawnNPCs > 0) {
+                    // Allocate instance data buffer
+                    bgfx::InstanceDataBuffer idb;
+                    bgfx::allocInstanceDataBuffer(&idb, drawnNPCs, instanceStride);
+                    
+                    uint8_t* data = idb.data;
+                    uint32_t npcIndex = 0;
+                    
+                    // Fill instance data
+                    for (auto& npcPtr : npcs) {
+                        if (!npcPtr || !npcPtr->isActive || npcIndex >= drawnNPCs) continue;
+                        auto& npc = *npcPtr;
+                        
+                        // Calculate transformation matrix
+                        float npcMatrix[16], npcTranslation[16], npcScale[16];
+                        bx::mtxScale(npcScale, npc.size, npc.size, npc.size);
+                        bx::mtxTranslate(npcTranslation, npc.position.x, npc.position.y, npc.position.z);
+                        bx::mtxMul(npcMatrix, npcScale, npcTranslation);
+                        
+                        // Copy matrix data (64 bytes)
+                        float* mtx = (float*)data;
+                        for (int i = 0; i < 16; i++) {
+                            mtx[i] = npcMatrix[i];
+                        }
+                        
+                        data += instanceStride;
+                        npcIndex++;
+                    }
+                    
+                    // Set vertex and index buffers (using shared NPC model)
+                    if (sharedNPCModel.hasAnyMeshes()) {
+                        // For now, render without animation to test instancing
+                        // TODO: Implement per-instance skeletal animation later
+                        
+                        // Set render state
+                        uint64_t objState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z 
+                                          | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA;
+                        bgfx::setState(objState);
+                        
+                        // Use instanced rendering
+                        sharedNPCModel.renderInstanced(npcInstancedProgram, s_texColor, &idb, drawnNPCs);
+                    }
+                }
+            }
         }
         
         // Set state for test cubes (with culling disabled for spinning cubes)

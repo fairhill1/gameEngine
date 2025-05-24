@@ -303,3 +303,13 @@ bool OzzAnimationSystem::skinVertices(const float* inPositions, float* outPositi
     
     return skinningJob.Run();
 }
+
+void OzzAnimationSystem::getBoneMatrices(std::vector<float>& outMatrices) {
+    // Resize output vector for 64 matrices * 16 floats each
+    outMatrices.resize(64 * 16, 0.0f);
+    
+    if (isLoaded()) {
+        // Use existing calculateBoneMatrices method
+        calculateBoneMatrices(outMatrices.data(), 64);
+    }
+}
