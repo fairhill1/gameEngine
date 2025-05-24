@@ -22,6 +22,11 @@ struct Player {
     int maxHealth;
     float lastDamageTime;
     
+    // Orientation and rotation
+    float rotation;          // Current rotation in radians (Y-axis)
+    float targetRotation;    // Target rotation for smooth transitions
+    float rotationSpeed;     // How fast to rotate (radians per second)
+    
     // Combat properties
     NPC* combatTarget;       // Current NPC we're fighting
     float lastAttackTime;

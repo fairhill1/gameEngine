@@ -8,6 +8,7 @@
 Player::Player() : position({0.0f, 0.0f, 0.0f}), targetPosition({0.0f, 0.0f, 0.0f}), 
            hasTarget(false), isSprinting(false), moveSpeed(0.05f), sprintSpeed(0.15f), size(0.3f),
            health(100), maxHealth(100), lastDamageTime(0.0f),
+           rotation(0.0f), targetRotation(0.0f), rotationSpeed(10.0f),
            combatTarget(nullptr), lastAttackTime(0.0f), attackCooldown(1.2f),
            attackDamage(15), hitChance(0.8f), dodgeChance(0.3f), inCombat(false), hitFlashTimer(0.0f),
            lastMovementTime(0.0f), distanceTraveled(0.0f) {}

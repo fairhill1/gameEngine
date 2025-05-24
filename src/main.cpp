@@ -1215,6 +1215,10 @@ void Player::update(const ChunkManager& chunkManager, float currentTime, float d
             inCombat = true;
             hasTarget = false; // Stop normal movement
             
+            // Face the combat target
+            // Use -90° offset to fix mannequin orientation
+            targetRotation = atan2(dz / distance, dx / distance) - bx::kPi/2;
+            
             // Maintain combat distance
             if (distance > 2.5f) {
                 // Move closer
@@ -1284,6 +1288,10 @@ void Player::update(const ChunkManager& chunkManager, float currentTime, float d
             direction.x /= distance;
             direction.z /= distance;
             
+            // Calculate target rotation from movement direction
+            // Use -90° offset to fix mannequin orientation
+            targetRotation = atan2(direction.z, direction.x) - bx::kPi/2;
+            
             // Apply Athletics modifier to speed
             float athleticsModifier = skills.getSkill(SkillType::ATHLETICS).getModifier();
             float currentSpeed = (isSprinting ? sprintSpeed : moveSpeed) * athleticsModifier;
@@ -1295,6 +1303,22 @@ void Player::update(const ChunkManager& chunkManager, float currentTime, float d
     
     // Always update Y position
     position.y = chunkManager.getHeightAt(position.x, position.z) + size - 5.0f;
+    
+    // Smooth rotation transitions
+    float rotationDiff = targetRotation - rotation;
+    // Handle angle wrapping (shortest path)
+    if (rotationDiff > bx::kPi) rotationDiff -= 2.0f * bx::kPi;
+    if (rotationDiff < -bx::kPi) rotationDiff += 2.0f * bx::kPi;
+    
+    float maxRotationStep = rotationSpeed * deltaTime;
+    if (bx::abs(rotationDiff) < maxRotationStep) {
+        rotation = targetRotation;
+    } else {
+        rotation += (rotationDiff > 0.0f ? maxRotationStep : -maxRotationStep);
+        // Keep rotation in [-π, π] range
+        if (rotation > bx::kPi) rotation -= 2.0f * bx::kPi;
+        if (rotation < -bx::kPi) rotation += 2.0f * bx::kPi;
+    }
     
     // Calculate distance traveled and award Athletics XP
     float dx = position.x - oldPosition.x;
@@ -2308,10 +2332,15 @@ int main(int argc, char* argv[]) {
         
         // Render player as mannequin model
         if (mannequinModel.hasAnyMeshes()) {
-            float playerMatrix[16], playerTranslation[16], playerScale[16];
+            float playerMatrix[16], playerTranslation[16], playerScale[16], playerRotation[16];
             bx::mtxScale(playerScale, 1.0f, 1.0f, 1.0f);  // Default scale for mannequin
+            bx::mtxRotateY(playerRotation, player.rotation);  // Apply Y-axis rotation
             bx::mtxTranslate(playerTranslation, player.position.x, player.position.y, player.position.z);
-            bx::mtxMul(playerMatrix, playerScale, playerTranslation);
+            
+            // Combine transformations: Scale -> Rotate -> Translate
+            float scaleRotation[16];
+            bx::mtxMul(scaleRotation, playerScale, playerRotation);
+            bx::mtxMul(playerMatrix, scaleRotation, playerTranslation);
             
             // Set default state for textured objects
             uint64_t objState = BGFX_STATE_DEFAULT;
@@ -2321,10 +2350,15 @@ int main(int argc, char* argv[]) {
             mannequinModel.render(texProgram, s_texColor, playerMatrix);
         } else {
             // Fallback to cube if mannequin fails to load
-            float playerMatrix[16], playerTranslation[16], playerScale[16];
+            float playerMatrix[16], playerTranslation[16], playerScale[16], playerRotation[16];
             bx::mtxScale(playerScale, player.size, player.size, player.size);
+            bx::mtxRotateY(playerRotation, player.rotation);  // Apply Y-axis rotation
             bx::mtxTranslate(playerTranslation, player.position.x, player.position.y, player.position.z);
-            bx::mtxMul(playerMatrix, playerScale, playerTranslation);
+            
+            // Combine transformations: Scale -> Rotate -> Translate
+            float scaleRotation[16];
+            bx::mtxMul(scaleRotation, playerScale, playerRotation);
+            bx::mtxMul(playerMatrix, scaleRotation, playerTranslation);
             
             // Set default state for objects
             uint64_t objState = BGFX_STATE_DEFAULT;

@@ -1,6 +1,8 @@
 ##  TODO
 
 - refactor
+- skybox
+- bigger game window
 - improve UI
 - trees
 - crafting
@@ -21,6 +23,10 @@
 - texture mapping
 
 ## CHANGELOG
+
+# 0.1.2
+
+- fi
 
 # 0.1.1
 

@@ -423,14 +423,30 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                         
                         // Convert float UV coordinates to int16_t normalized format
                         // Map [0,1] to [0, 32767] for proper BGFX normalization (like bump example)
-                        // Flip V coordinate since glTF and BGFX may use different conventions
+                        
+                        // Different models may need different UV coordinate handling
+                        bool shouldFlipV = true; // Default to flipping
+                        std::string meshName = mesh.name.empty() ? "Unknown" : mesh.name;
+                        
+                        // Don't flip V for garden lamp (it works correctly in glTF viewers)
+                        if (meshName.find("G-Object") != std::string::npos || 
+                            meshName.find("garden") != std::string::npos || 
+                            meshName.find("lamp") != std::string::npos) {
+                            shouldFlipV = false;
+                        }
+                        
                         vertices[i].texcoord[0] = int16_t(texcoord[0] * 32767.0f);
-                        vertices[i].texcoord[1] = int16_t((1.0f - texcoord[1]) * 32767.0f); // Flip V
+                        if (shouldFlipV) {
+                            vertices[i].texcoord[1] = int16_t((1.0f - texcoord[1]) * 32767.0f); // Flip V
+                        } else {
+                            vertices[i].texcoord[1] = int16_t(texcoord[1] * 32767.0f); // Don't flip V
+                        }
                         
                         // Debug first few texture coordinates
                         if (i < 3) {
-                            fprintf(stderr, "TEXCOORD_DEBUG: Vertex %zu: UV=(%.6f, %.6f) -> (%d, %d)\n", 
-                                   i, texcoord[0], texcoord[1], vertices[i].texcoord[0], vertices[i].texcoord[1]);
+                            fprintf(stderr, "TEXCOORD_DEBUG: Vertex %zu: UV=(%.6f, %.6f) -> (%d, %d) [%s]\n", 
+                                   i, texcoord[0], texcoord[1], vertices[i].texcoord[0], vertices[i].texcoord[1],
+                                   shouldFlipV ? "V-FLIPPED" : "V-NORMAL");
                         }
                     } else {
                         // Safe fallback for out-of-bounds access
