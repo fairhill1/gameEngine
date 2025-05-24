@@ -13,5 +13,7 @@ void main()
     
     gl_Position = mul(u_viewProj, worldPosition);
     v_texcoord0 = a_texcoord0;
-    v_normal = a_normal.xyz;
+    
+    // Transform normal to world space (assuming uniform scaling)
+    v_normal = mul(instanceMatrix, vec4(a_normal, 0.0)).xyz;
 }

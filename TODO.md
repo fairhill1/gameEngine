@@ -2,7 +2,7 @@
 
 - skybox
 - marker on click terrain to move
-- npc models and anim
+- npc animation gpu skinning
 - bigger game window
 - improve UI
 - trees
@@ -14,7 +14,6 @@
 - building
 - animations
 - lightning
-- day/night cycles w sun & moon
 - savegame
 - basic sounds
 - weapons & armor
@@ -32,6 +31,7 @@
 - fix texture mapping at least for player model
 - player orients
 - ozz animations implemented for player with basic walking, idle, running, punching
+- day/night cycles w sun & moon
 
 # 0.1.1
 

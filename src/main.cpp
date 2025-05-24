@@ -1702,6 +1702,50 @@ void render_object_at_position(bgfx::VertexBufferHandle vbh, bgfx::IndexBufferHa
     bgfx::submit(0, program);
 }
 
+// Generate sphere vertices and indices for the sun
+void generateSphere(std::vector<PosColorVertex>& vertices, std::vector<uint16_t>& indices, 
+                   float radius, int segments, int rings) {
+    vertices.clear();
+    indices.clear();
+    
+    // Generate vertices
+    for (int ring = 0; ring <= rings; ++ring) {
+        float v = float(ring) / float(rings);
+        float phi = v * bx::kPi; // 0 to PI
+        
+        for (int segment = 0; segment <= segments; ++segment) {
+            float u = float(segment) / float(segments);
+            float theta = u * 2.0f * bx::kPi; // 0 to 2*PI
+            
+            float x = radius * bx::sin(phi) * bx::cos(theta);
+            float y = radius * bx::cos(phi);
+            float z = radius * bx::sin(phi) * bx::sin(theta);
+            
+            // Sun color - will be modified by shader based on height
+            uint32_t color = 0xFFFFFF00; // Yellow base color
+            
+            vertices.push_back({x, y, z, color});
+        }
+    }
+    
+    // Generate indices
+    for (int ring = 0; ring < rings; ++ring) {
+        for (int segment = 0; segment < segments; ++segment) {
+            int current = ring * (segments + 1) + segment;
+            int next = current + segments + 1;
+            
+            // Two triangles per quad
+            indices.push_back(current);
+            indices.push_back(next);
+            indices.push_back(current + 1);
+            
+            indices.push_back(current + 1);
+            indices.push_back(next);
+            indices.push_back(next + 1);
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     srand(static_cast<unsigned int>(time(nullptr)));
     
@@ -1776,8 +1820,6 @@ int main(int argc, char* argv[]) {
     // Enable debug text for overlay
     bgfx::setDebug(BGFX_DEBUG_TEXT);
 
-    // Set view clear state
-    bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x443355FF, 1.0f, 0);
     bgfx::setViewRect(0, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
     
     std::cout << "Preparing 3D rendering..." << std::endl;
@@ -1792,6 +1834,24 @@ int main(int argc, char* argv[]) {
         .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
         .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
         .end();
+
+    // Create sun sphere
+    std::cout << "Creating sun sphere..." << std::endl;
+    std::vector<PosColorVertex> sunVertices;
+    std::vector<uint16_t> sunIndices;
+    generateSphere(sunVertices, sunIndices, 1.0f, 16, 8); // radius=1, 16 segments, 8 rings
+    
+    bgfx::VertexBufferHandle sunVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(sunVertices.data(), sunVertices.size() * sizeof(PosColorVertex)), layout);
+    bgfx::IndexBufferHandle sunIbh = bgfx::createIndexBuffer(
+        bgfx::makeRef(sunIndices.data(), sunIndices.size() * sizeof(uint16_t)));
+    
+    // Create moon sphere (can reuse sun vertices/indices)
+    std::cout << "Creating moon sphere..." << std::endl;
+    bgfx::VertexBufferHandle moonVbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(sunVertices.data(), sunVertices.size() * sizeof(PosColorVertex)), layout);
+    bgfx::IndexBufferHandle moonIbh = bgfx::createIndexBuffer(
+        bgfx::makeRef(sunIndices.data(), sunIndices.size() * sizeof(uint16_t)));
 
     // Create vertex buffers
     bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(
@@ -1842,6 +1902,16 @@ int main(int argc, char* argv[]) {
     
     // Create texture uniforms
     bgfx::UniformHandle s_texColor = bgfx::createUniform("s_texColor", bgfx::UniformType::Sampler);
+    
+    // Day/night cycle uniforms
+    bgfx::UniformHandle u_timeOfDay = bgfx::createUniform("u_timeOfDay", bgfx::UniformType::Vec4);
+    bgfx::UniformHandle u_sunDirection = bgfx::createUniform("u_sunDirection", bgfx::UniformType::Vec4);
+    bgfx::UniformHandle u_skyColor = bgfx::createUniform("u_skyColor", bgfx::UniformType::Vec4);
+    bgfx::UniformHandle u_moonData = bgfx::createUniform("u_moonData", bgfx::UniformType::Vec4);
+    
+    // Game time variables - start at 08:00 (8/24 = 0.333 of day cycle)
+    float gameTime = (8.0f / 24.0f) * 240.0f; // Start at 08:00 game time
+    float dayLength = 240.0f;  // Day/night cycle length in seconds (4 minutes total)
     
     // Load the Garden Lamp GLB model with detailed debugging
     std::cout << "Loading Garden Lamp GLB model with buffer debugging..." << std::endl;
@@ -2050,7 +2120,7 @@ int main(int argc, char* argv[]) {
     // Load shaders
     std::cout << "Loading shaders..." << std::endl;
     
-    bgfx::ShaderHandle vsh, fsh, texVsh, texFsh, npcInstancedVsh, npcInstancedFsh;
+    bgfx::ShaderHandle vsh, fsh, texVsh, texFsh, npcInstancedVsh, npcInstancedFsh, sunVsh, sunFsh, moonVsh, moonFsh;
     
 #if BX_PLATFORM_OSX
     std::string vsPath = "shaders/metal/vs_cube.bin";
@@ -2059,6 +2129,10 @@ int main(int argc, char* argv[]) {
     std::string texFsPath = "shaders/metal/fs_textured_cube.bin";
     std::string npcInstancedVsPath = "shaders/metal/vs_npc_instanced.bin";
     std::string npcInstancedFsPath = "shaders/metal/fs_npc_instanced.bin";
+    std::string sunVsPath = "shaders/metal/vs_sun.bin";
+    std::string sunFsPath = "shaders/metal/fs_sun.bin";
+    std::string moonVsPath = "shaders/metal/vs_moon.bin";
+    std::string moonFsPath = "shaders/metal/fs_moon.bin";
     
     std::cout << "Looking for shaders at:" << std::endl;
     std::cout << "  Colored cube vertex: " << vsPath << std::endl;
@@ -2067,6 +2141,10 @@ int main(int argc, char* argv[]) {
     std::cout << "  Textured cube fragment: " << texFsPath << std::endl;
     std::cout << "  NPC instanced vertex: " << npcInstancedVsPath << std::endl;
     std::cout << "  NPC instanced fragment: " << npcInstancedFsPath << std::endl;
+    std::cout << "  Sun vertex: " << sunVsPath << std::endl;
+    std::cout << "  Sun fragment: " << sunFsPath << std::endl;
+    std::cout << "  Moon vertex: " << moonVsPath << std::endl;
+    std::cout << "  Moon fragment: " << moonFsPath << std::endl;
     
     FILE* vsFile = fopen(vsPath.c_str(), "rb");
     FILE* fsFile = fopen(fsPath.c_str(), "rb");
@@ -2074,14 +2152,22 @@ int main(int argc, char* argv[]) {
     FILE* texFsFile = fopen(texFsPath.c_str(), "rb");
     FILE* npcInstancedVsFile = fopen(npcInstancedVsPath.c_str(), "rb");
     FILE* npcInstancedFsFile = fopen(npcInstancedFsPath.c_str(), "rb");
+    FILE* sunVsFile = fopen(sunVsPath.c_str(), "rb");
+    FILE* sunFsFile = fopen(sunFsPath.c_str(), "rb");
+    FILE* moonVsFile = fopen(moonVsPath.c_str(), "rb");
+    FILE* moonFsFile = fopen(moonFsPath.c_str(), "rb");
     
-    if (!vsFile || !fsFile || !texVsFile || !texFsFile || !npcInstancedVsFile || !npcInstancedFsFile) {
+    if (!vsFile || !fsFile || !texVsFile || !texFsFile || !npcInstancedVsFile || !npcInstancedFsFile || !sunVsFile || !sunFsFile || !moonVsFile || !moonFsFile) {
         if (vsFile) fclose(vsFile);
         if (fsFile) fclose(fsFile);
         if (texVsFile) fclose(texVsFile);
         if (texFsFile) fclose(texFsFile);
         if (npcInstancedVsFile) fclose(npcInstancedVsFile);
         if (npcInstancedFsFile) fclose(npcInstancedFsFile);
+        if (sunVsFile) fclose(sunVsFile);
+        if (sunFsFile) fclose(sunFsFile);
+        if (moonVsFile) fclose(moonVsFile);
+        if (moonFsFile) fclose(moonFsFile);
         std::cerr << "Failed to open shader files!" << std::endl;
         return 1;
     }
@@ -2093,6 +2179,10 @@ int main(int argc, char* argv[]) {
     fseek(texFsFile, 0, SEEK_END); long texFsSize = ftell(texFsFile); fseek(texFsFile, 0, SEEK_SET);
     fseek(npcInstancedVsFile, 0, SEEK_END); long npcInstancedVsSize = ftell(npcInstancedVsFile); fseek(npcInstancedVsFile, 0, SEEK_SET);
     fseek(npcInstancedFsFile, 0, SEEK_END); long npcInstancedFsSize = ftell(npcInstancedFsFile); fseek(npcInstancedFsFile, 0, SEEK_SET);
+    fseek(sunVsFile, 0, SEEK_END); long sunVsSize = ftell(sunVsFile); fseek(sunVsFile, 0, SEEK_SET);
+    fseek(sunFsFile, 0, SEEK_END); long sunFsSize = ftell(sunFsFile); fseek(sunFsFile, 0, SEEK_SET);
+    fseek(moonVsFile, 0, SEEK_END); long moonVsSize = ftell(moonVsFile); fseek(moonVsFile, 0, SEEK_SET);
+    fseek(moonFsFile, 0, SEEK_END); long moonFsSize = ftell(moonFsFile); fseek(moonFsFile, 0, SEEK_SET);
     
     // Read the shader files
     const bgfx::Memory* vs_mem = bgfx::alloc(vsSize);
@@ -2101,6 +2191,10 @@ int main(int argc, char* argv[]) {
     const bgfx::Memory* texFs_mem = bgfx::alloc(texFsSize);
     const bgfx::Memory* npcInstancedVs_mem = bgfx::alloc(npcInstancedVsSize);
     const bgfx::Memory* npcInstancedFs_mem = bgfx::alloc(npcInstancedFsSize);
+    const bgfx::Memory* sunVs_mem = bgfx::alloc(sunVsSize);
+    const bgfx::Memory* sunFs_mem = bgfx::alloc(sunFsSize);
+    const bgfx::Memory* moonVs_mem = bgfx::alloc(moonVsSize);
+    const bgfx::Memory* moonFs_mem = bgfx::alloc(moonFsSize);
     
     size_t vsRead = fread(vs_mem->data, 1, vsSize, vsFile);
     size_t fsRead = fread(fs_mem->data, 1, fsSize, fsFile);
@@ -2108,12 +2202,20 @@ int main(int argc, char* argv[]) {
     size_t texFsRead = fread(texFs_mem->data, 1, texFsSize, texFsFile);
     size_t npcInstancedVsRead = fread(npcInstancedVs_mem->data, 1, npcInstancedVsSize, npcInstancedVsFile);
     size_t npcInstancedFsRead = fread(npcInstancedFs_mem->data, 1, npcInstancedFsSize, npcInstancedFsFile);
+    size_t sunVsRead = fread(sunVs_mem->data, 1, sunVsSize, sunVsFile);
+    size_t sunFsRead = fread(sunFs_mem->data, 1, sunFsSize, sunFsFile);
+    size_t moonVsRead = fread(moonVs_mem->data, 1, moonVsSize, moonVsFile);
+    size_t moonFsRead = fread(moonFs_mem->data, 1, moonFsSize, moonFsFile);
     
     fclose(vsFile); fclose(fsFile); fclose(texVsFile); fclose(texFsFile); 
     fclose(npcInstancedVsFile); fclose(npcInstancedFsFile);
+    fclose(sunVsFile); fclose(sunFsFile);
+    fclose(moonVsFile); fclose(moonFsFile);
     
     if (vsRead != vsSize || fsRead != fsSize || texVsRead != texVsSize || texFsRead != texFsSize || 
-        npcInstancedVsRead != npcInstancedVsSize || npcInstancedFsRead != npcInstancedFsSize) {
+        npcInstancedVsRead != npcInstancedVsSize || npcInstancedFsRead != npcInstancedFsSize ||
+        sunVsRead != sunVsSize || sunFsRead != sunFsSize ||
+        moonVsRead != moonVsSize || moonFsRead != moonFsSize) {
         std::cerr << "Failed to read shader files fully!" << std::endl;
         return 1;
     }
@@ -2125,9 +2227,15 @@ int main(int argc, char* argv[]) {
     texFsh = bgfx::createShader(texFs_mem);
     npcInstancedVsh = bgfx::createShader(npcInstancedVs_mem);
     npcInstancedFsh = bgfx::createShader(npcInstancedFs_mem);
+    sunVsh = bgfx::createShader(sunVs_mem);
+    sunFsh = bgfx::createShader(sunFs_mem);
+    moonVsh = bgfx::createShader(moonVs_mem);
+    moonFsh = bgfx::createShader(moonFs_mem);
     
     if (!bgfx::isValid(vsh) || !bgfx::isValid(fsh) || !bgfx::isValid(texVsh) || !bgfx::isValid(texFsh) ||
-        !bgfx::isValid(npcInstancedVsh) || !bgfx::isValid(npcInstancedFsh)) {
+        !bgfx::isValid(npcInstancedVsh) || !bgfx::isValid(npcInstancedFsh) ||
+        !bgfx::isValid(sunVsh) || !bgfx::isValid(sunFsh) ||
+        !bgfx::isValid(moonVsh) || !bgfx::isValid(moonFsh)) {
         std::cerr << "Failed to create shader objects!" << std::endl;
         return 1;
     }
@@ -2141,8 +2249,10 @@ int main(int argc, char* argv[]) {
     bgfx::ProgramHandle program = bgfx::createProgram(vsh, fsh, true);
     bgfx::ProgramHandle texProgram = bgfx::createProgram(texVsh, texFsh, true);
     npcInstancedProgram = bgfx::createProgram(npcInstancedVsh, npcInstancedFsh, true);
+    bgfx::ProgramHandle sunProgram = bgfx::createProgram(sunVsh, sunFsh, true);
+    bgfx::ProgramHandle moonProgram = bgfx::createProgram(moonVsh, moonFsh, true);
     
-    if (!bgfx::isValid(program) || !bgfx::isValid(texProgram) || !bgfx::isValid(npcInstancedProgram)) {
+    if (!bgfx::isValid(program) || !bgfx::isValid(texProgram) || !bgfx::isValid(npcInstancedProgram) || !bgfx::isValid(sunProgram) || !bgfx::isValid(moonProgram)) {
         std::cerr << "Failed to create shader programs!" << std::endl;
         return 1;
     }
@@ -2388,6 +2498,48 @@ int main(int argc, char* argv[]) {
         time += 0.01f;
         float deltaTime = 0.01f; // Fixed delta time for now
         
+        // Update game time for day/night cycle
+        gameTime += deltaTime;
+        float normalizedTime = fmod(gameTime / dayLength, 1.0f); // 0.0 = midnight, 0.5 = noon
+        
+        // Calculate sun position (circular path across sky)
+        // Shift by -π/2 so that noon (0.5) is at the peak (sin = 1)
+        float sunAngle = (normalizedTime * 2.0f * bx::kPi) - (bx::kPi / 2.0f);
+        float sunHeight = bx::sin(sunAngle);
+        float sunX = bx::cos(sunAngle);
+        
+        // Sun direction vector (pointing FROM sun TO surface)
+        float sunDir[4] = { -sunX * 0.5f, -sunHeight, -0.3f, 0.0f };
+        float timeData[4] = { normalizedTime, sunHeight, 0.0f, 0.0f };
+        
+        // Sky color based on time of day - much brighter
+        bx::Vec3 dayColor = { 0.6f, 0.8f, 1.0f };      // Bright blue
+        bx::Vec3 sunsetColor = { 1.0f, 0.6f, 0.3f };   // Bright orange
+        bx::Vec3 nightColor = { 0.2f, 0.2f, 0.4f };    // Lighter blue (not dark purple)
+        
+        // Interpolate colors based on sun height
+        bx::Vec3 currentSkyColor = nightColor;
+        if (sunHeight > 0) {
+            float t = bx::abs(sunHeight);
+            currentSkyColor.x = bx::lerp(sunsetColor.x, dayColor.x, t);
+            currentSkyColor.y = bx::lerp(sunsetColor.y, dayColor.y, t);
+            currentSkyColor.z = bx::lerp(sunsetColor.z, dayColor.z, t);
+        }
+        
+        float skyColorData[4] = { currentSkyColor.x, currentSkyColor.y, currentSkyColor.z, 1.0f };
+        
+        // Set dynamic clear color based on sky color
+        uint32_t clearColor = 0xFF000000 | 
+                             ((uint32_t)(currentSkyColor.z * 255) << 16) |  // Blue
+                             ((uint32_t)(currentSkyColor.y * 255) << 8) |   // Green  
+                             ((uint32_t)(currentSkyColor.x * 255));         // Red
+        bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, clearColor, 1.0f, 0);
+        
+        // Set day/night cycle uniforms
+        bgfx::setUniform(u_timeOfDay, timeData);
+        bgfx::setUniform(u_sunDirection, sunDir);
+        bgfx::setUniform(u_skyColor, skyColorData);
+        
         // Update camera with keyboard input
         camera.handleKeyboardInput(keyboardState, deltaTime);
         
@@ -2616,6 +2768,84 @@ int main(int argc, char* argv[]) {
                      hoveredNPC->getTypeName(), hoveredNPC->health, hoveredNPC->maxHealth);
             hoverInfo = buffer;
             hasHoverInfo = true;
+        }
+        
+        // Render sun sphere in the sky
+        static float lastSunDebug = 0.0f;
+        if (time - lastSunDebug > 2.0f) {
+            std::cout << "Sun: height=" << sunHeight << ", x=" << sunX << ", time=" << normalizedTime << std::endl;
+            lastSunDebug = time;
+        }
+        
+        if (sunHeight > -0.2f) { // Only render sun when above horizon
+            static float lastRenderDebug = 0.0f;
+            if (time - lastRenderDebug > 3.0f) {
+                std::cout << "Rendering sun at position: height=" << sunHeight << std::endl;
+                lastRenderDebug = time;
+            }
+            
+            float skyDistance = 50.0f; // Much closer distance for visibility
+            float sunSize = 5.0f; // Larger and more visible
+            
+            // Calculate sun world position in sky dome based on day/night cycle
+            float sunWorldX = camera.position.x + sunX * skyDistance;
+            float sunWorldY = camera.position.y + bx::abs(sunHeight) * 25.0f + 10.0f; // Reasonable height
+            float sunWorldZ = camera.position.z + bx::sin(sunAngle * 0.5f) * skyDistance;
+            
+            if (time - lastRenderDebug > 3.0f) {
+                std::cout << "Sun world pos: (" << sunWorldX << ", " << sunWorldY << ", " << sunWorldZ << ")" << std::endl;
+                std::cout << "Camera pos: (" << camera.position.x << ", " << camera.position.y << ", " << camera.position.z << ")" << std::endl;
+            }
+            
+            float sunMatrix[16], sunTranslation[16], sunScale[16];
+            bx::mtxScale(sunScale, sunSize, sunSize, sunSize);
+            bx::mtxTranslate(sunTranslation, sunWorldX, sunWorldY, sunWorldZ);
+            bx::mtxMul(sunMatrix, sunScale, sunTranslation);
+            
+            // Set sun rendering state (disable depth test so it's always visible)
+            uint64_t sunState = BGFX_STATE_DEFAULT;
+            sunState |= BGFX_STATE_BLEND_ADD;
+            sunState &= ~BGFX_STATE_CULL_MASK;
+            sunState &= ~BGFX_STATE_DEPTH_TEST_MASK; // Disable depth test - always render
+            bgfx::setState(sunState);
+            
+            render_object_at_position(sunVbh, sunIbh, sunProgram, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, sunMatrix);
+        }
+        
+        // Render moon sphere in the sky (opposite to sun, at night)
+        float moonHeight = -sunHeight; // Moon is opposite to sun
+        if (moonHeight > -0.2f) { // Only render moon when above horizon
+            float skyDistance = 50.0f; // Same distance as sun
+            float moonSize = 2.5f; // Smaller than sun
+            
+            // Calculate moon phase (0=new moon, 0.5=full moon, 1=new moon)
+            // Use a slower cycle than day/night - full moon phase cycle every ~8 days
+            float moonPhase = fmod((gameTime / dayLength) * 0.125f, 1.0f); // 8x slower than day cycle
+            
+            // Calculate moon world position (opposite side of sky from sun)
+            float moonX = -sunX; // Opposite horizontal position
+            float moonWorldX = camera.position.x + moonX * skyDistance;
+            float moonWorldY = camera.position.y + bx::abs(moonHeight) * 25.0f + 10.0f;
+            float moonWorldZ = camera.position.z - bx::sin(sunAngle * 0.5f) * skyDistance;
+            
+            float moonMatrix[16], moonTranslation[16], moonScale[16];
+            bx::mtxScale(moonScale, moonSize, moonSize, moonSize);
+            bx::mtxTranslate(moonTranslation, moonWorldX, moonWorldY, moonWorldZ);
+            bx::mtxMul(moonMatrix, moonScale, moonTranslation);
+            
+            // Set moon rendering state
+            uint64_t moonState = BGFX_STATE_DEFAULT;
+            moonState |= BGFX_STATE_BLEND_ALPHA;
+            moonState &= ~BGFX_STATE_CULL_MASK;
+            moonState &= ~BGFX_STATE_DEPTH_TEST_MASK; // Always render
+            bgfx::setState(moonState);
+            
+            // Set moon uniforms
+            float moonData[4] = { moonPhase, moonHeight, 0.0f, 0.0f };
+            bgfx::setUniform(u_moonData, moonData);
+            bgfx::setUniform(u_timeOfDay, timeData); // Reuse sun's time data
+            
+            render_object_at_position(moonVbh, moonIbh, moonProgram, BGFX_INVALID_HANDLE, BGFX_INVALID_HANDLE, moonMatrix);
         }
         
         // Render all loaded terrain chunks
@@ -2887,21 +3117,64 @@ int main(int argc, char* argv[]) {
         // Start UI rendering
         uiRenderer.begin(currentWidth, currentHeight);
         
+        // Render game time clock (always visible in top right)
+        {
+            // Convert game time to 24-hour format (normalizedTime: 0=midnight, 0.5=noon)
+            float hours24 = normalizedTime * 24.0f;
+            int hours = (int)hours24;
+            int minutes = (int)((hours24 - hours) * 60.0f);
+            
+            // Determine day/night period
+            const char* period = "";
+            uint32_t timeColor = UIColors::TEXT_NORMAL;
+            if (sunHeight > 0.7f) {
+                period = " ☀"; // Day - sun symbol
+                timeColor = UIColors::YELLOW;
+            } else if (sunHeight > 0.3f) {
+                period = " ☀"; // Day
+                timeColor = UIColors::WHITE;
+            } else if (sunHeight > -0.3f) {
+                period = " ◗"; // Dawn/Dusk - partial sun
+                timeColor = 0xFFFF8800; // Orange
+            } else {
+                // Night time - show moon phase
+                float moonPhase = fmod((gameTime / dayLength) * 0.125f, 1.0f);
+                if (moonPhase < 0.1f || moonPhase > 0.9f) {
+                    period = " ●"; // New moon
+                } else if (moonPhase < 0.3f) {
+                    period = " ◐"; // Waxing crescent
+                } else if (moonPhase < 0.7f) {
+                    period = " ○"; // Full moon
+                } else {
+                    period = " ◑"; // Waning crescent
+                }
+                timeColor = 0xFF8888FF; // Light blue
+            }
+            
+            char timeText[32];
+            snprintf(timeText, sizeof(timeText), "%02d:%02d%s", hours, minutes, period);
+            
+            // Position at top right corner
+            float clockWidth = uiRenderer.getTextWidth(timeText) + 10;
+            uiRenderer.panel(currentWidth - clockWidth - 5, 5, clockWidth, 35, 0xAA000000);
+            uiRenderer.text(currentWidth - clockWidth, 15, timeText, timeColor);
+        }
+        
         // Render debug overlay if enabled
         if (debugOverlay.enabled) {
             // Create debug panel background (black with transparency) - ABGR format - taller panel
-            uiRenderer.panel(currentWidth - 220, 10, 210, 110, 0xAA000000); // Black with 66% alpha (ABGR)
+            uiRenderer.panel(currentWidth - 220, 50, 210, 110, 0xAA000000); // Moved down to make room for clock
             
             // Render FPS and debug info with custom UI - better line spacing for 24px font
             char fpsText[64];
             snprintf(fpsText, sizeof(fpsText), "FPS: %3d (%4.1fms)", (int)debugOverlay.fps, debugOverlay.frameTime);
-            uiRenderer.text(currentWidth - 210, 25, fpsText, UIColors::TEXT_NORMAL);
+            uiRenderer.text(currentWidth - 210, 65, fpsText, UIColors::TEXT_NORMAL); // Moved down
             
             snprintf(fpsText, sizeof(fpsText), "Chunks: %d", (int)chunkManager.getLoadedChunkInfo().size());
-            uiRenderer.text(currentWidth - 210, 55, fpsText, UIColors::TEXT_NORMAL);  // 30px spacing instead of 20px
+            uiRenderer.text(currentWidth - 210, 95, fpsText, UIColors::TEXT_NORMAL);  // Moved down
             
             snprintf(fpsText, sizeof(fpsText), "Player: %.1f,%.1f", player.position.x, player.position.z);
-            uiRenderer.text(currentWidth - 210, 85, fpsText, UIColors::TEXT_NORMAL);  // 30px spacing instead of 20px
+            uiRenderer.text(currentWidth - 210, 125, fpsText, UIColors::TEXT_NORMAL);  // Moved down
         }
         
         // Render inventory overlay if enabled
