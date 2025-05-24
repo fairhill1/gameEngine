@@ -50,6 +50,22 @@ NPC::NPC(float x, float y, float z, NPCType npcType)
     health = maxHealth;  // Start at full health
     color = baseColor;   // Start with base color
     updateHealthColor(); // Apply initial color
+    
+    // Initialize animation system (model is now shared globally)
+    if (!ozzAnimSystem.loadSkeleton("build/assets/skeleton.ozz")) {
+        std::cerr << "Failed to load skeleton for NPC!" << std::endl;
+    }
+    if (!ozzAnimSystem.loadAnimation("idle", "build/assets/Armature_mixamo.com_Layer0.002.ozz")) {
+        std::cerr << "Failed to load idle animation for NPC!" << std::endl;
+    }
+    if (!ozzAnimSystem.loadAnimation("walking", "build/assets/walking_inplace.ozz")) {
+        std::cerr << "Failed to load walking animation for NPC!" << std::endl;
+    }
+    
+    // Set animation to idle by default
+    ozzAnimSystem.setCurrentAnimation("idle");
+    
+    // Note: Joint mapping will be set up globally for the shared model
 }
 
 const char* NPC::getTypeName() const {
@@ -139,6 +155,21 @@ void NPC::update(float deltaTime, float terrainHeight, Player* player, float cur
     
     stateTimer += deltaTime;
     
+    // Update animation based on movement state
+    bool isMoving = (state == NPCState::MOVING_TO_TARGET || 
+                     state == NPCState::APPROACHING_ENEMY || 
+                     state == NPCState::FLEEING ||
+                     state == NPCState::WANDERING);
+    
+    if (isMoving) {
+        ozzAnimSystem.setCurrentAnimation("walking");
+    } else {
+        ozzAnimSystem.setCurrentAnimation("idle");
+    }
+    
+    // Update animation system
+    ozzAnimSystem.updateAnimation(deltaTime);
+    
     // Update hit flash timer
     if (hitFlashTimer > 0) {
         hitFlashTimer -= deltaTime;
@@ -203,7 +234,7 @@ void NPC::update(float deltaTime, float terrainHeight, Player* player, float cur
                 position.z += velocity.z * deltaTime;
                 
                 // Update Y position to follow terrain
-                position.y = terrainHeight + size - 5.0f;
+                position.y = terrainHeight - 5.0f + 0.1f; // Mannequin feet should touch ground
             }
             
             // Timeout check - if moving too long, go idle
@@ -232,7 +263,7 @@ void NPC::update(float deltaTime, float terrainHeight, Player* player, float cur
                     
                     position.x += velocity.x * deltaTime;
                     position.z += velocity.z * deltaTime;
-                    position.y = terrainHeight + size - 5.0f;
+                    position.y = terrainHeight - 5.0f + 0.1f; // Mannequin feet should touch ground
                 }
                 
                 // Give up if too far or taking too long
@@ -270,7 +301,7 @@ void NPC::update(float deltaTime, float terrainHeight, Player* player, float cur
                 
                 position.x += velocity.x * deltaTime;
                 position.z += velocity.z * deltaTime;
-                position.y = terrainHeight + size - 5.0f;
+                position.y = terrainHeight - 5.0f + 0.1f; // Mannequin feet should touch ground
                 
                 // Attack if cooldown is ready
                 if (currentTime - lastAttackTime >= attackCooldown) {
@@ -318,7 +349,7 @@ void NPC::update(float deltaTime, float terrainHeight, Player* player, float cur
                 
                 position.x += velocity.x * deltaTime;
                 position.z += velocity.z * deltaTime;
-                position.y = terrainHeight + size - 5.0f;
+                position.y = terrainHeight - 5.0f + 0.1f; // Mannequin feet should touch ground
             }
             break;
         }
@@ -335,8 +366,46 @@ void NPC::update(float deltaTime, float terrainHeight, Player* player, float cur
             position.x += velocity.x * deltaTime;
             position.z += velocity.z * deltaTime;
             
-            // Update Y position to follow terrain
-            position.y = terrainHeight + size - 5.0f;
+            // Update Y position to follow terrain  
+            position.y = terrainHeight - 5.0f + 0.1f; // Mannequin feet should touch ground
             break;
     }
 }
+
+void NPC::setupInverseBindMatrices(const Model& sharedModel) {
+    // Extract inverse bind matrices from the shared model
+    std::vector<float> inverseBindMatrices;
+    if (sharedModel.getInverseBindMatrices(inverseBindMatrices)) {
+        int numGltfJoints = inverseBindMatrices.size() / 16;
+        auto ozzJointNames = ozzAnimSystem.getJointNames();
+        
+        // Create joint mapping (same logic as in main.cpp)
+        std::vector<int> gltfToOzzMapping(numGltfJoints, -1);
+        int mappedCount = 0;
+        
+        if (!sharedModel.skins.empty()) {
+            const auto& skin = sharedModel.skins[0];
+            for (int skinIdx = 0; skinIdx < (int)skin.jointIndices.size(); skinIdx++) {
+                int nodeIndex = skin.jointIndices[skinIdx];
+                if (nodeIndex < (int)sharedModel.nodes.size()) {
+                    const std::string& gltfName = sharedModel.nodes[nodeIndex].name;
+                    // Skip first 2 ozz joints (Armature, Ch36) - start from Hips
+                    for (int ozzIdx = 2; ozzIdx < (int)ozzJointNames.size(); ozzIdx++) {
+                        if (gltfName == ozzJointNames[ozzIdx]) {
+                            gltfToOzzMapping[skinIdx] = ozzIdx;
+                            mappedCount++;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Set inverse bind matrices with mapping for this NPC's animation system
+        ozzAnimSystem.setInverseBindMatricesWithMapping(inverseBindMatrices.data(), numGltfJoints, gltfToOzzMapping);
+        // std::cout << "NPC inverse bind matrices set: " << mappedCount << "/" << numGltfJoints << " joints mapped" << std::endl;
+    } else {
+        std::cerr << "Failed to extract inverse bind matrices from shared model for NPC!" << std::endl;
+    }
+}
+

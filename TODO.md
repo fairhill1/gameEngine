@@ -1,7 +1,8 @@
 ##  TODO
 
-- refactor
 - skybox
+- marker on click terrain to move
+- npc models and anim
 - bigger game window
 - improve UI
 - trees
@@ -17,6 +18,7 @@
 - savegame
 - basic sounds
 - weapons & armor
+- refactor
 
 ## BUGS
 

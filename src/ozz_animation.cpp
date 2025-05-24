@@ -94,11 +94,11 @@ void OzzAnimationSystem::updateAnimation(float deltaTime) {
             for (size_t i = 0; i < modelMatrices.size(); i++) {
                 skinMatrices[i] = modelMatrices[i] * inverseBindMatrices[i];
             }
-            std::cout << "Using proper skin matrices (model * inverse bind)" << std::endl;
+            // std::cout << "Using proper skin matrices (model * inverse bind)" << std::endl;
         } else {
             // If no inverse bind matrices, use model matrices directly
             skinMatrices = modelMatrices;
-            std::cout << "Size mismatch - using model matrices directly (inv:" << inverseBindMatrices.size() << " vs model:" << modelMatrices.size() << ")" << std::endl;
+            // std::cout << "Size mismatch - using model matrices directly (inv:" << inverseBindMatrices.size() << " vs model:" << modelMatrices.size() << ")" << std::endl;
         }
     }
 }
@@ -246,7 +246,7 @@ void OzzAnimationSystem::setCurrentAnimation(const std::string& name) {
         currentAnimation = it->second.get();
         currentAnimationName = name;
         animationTime = 0.0f; // Reset time when switching animations
-        std::cout << "Switched to animation: " << name << " (duration: " << currentAnimation->duration() << "s)" << std::endl;
+        // std::cout << "Switched to animation: " << name << " (duration: " << currentAnimation->duration() << "s)" << std::endl;
     } else {
         std::cerr << "Animation '" << name << "' not found!" << std::endl;
     }

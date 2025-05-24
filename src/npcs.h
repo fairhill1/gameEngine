@@ -3,9 +3,12 @@
 #include <bx/math.h>
 #include <iostream>
 #include <cstdint>
+#include "model.h"
+#include "ozz_animation.h"
 
 // Forward declarations
 struct Player;
+class Model;
 
 // NPC types available in the game
 enum class NPCType {
@@ -55,7 +58,16 @@ struct NPC {
     float dodgeChance;       // 0.0 to 1.0
     float hitFlashTimer;     // Red flash when hit
     
+    // Animation (model is now shared globally)
+    OzzAnimationSystem ozzAnimSystem; // Individual animation system
+    
     NPC(float x, float y, float z, NPCType npcType);
+    
+    // Disable copy and move due to ozz objects being non-copyable/non-movable
+    NPC(const NPC&) = delete;
+    NPC& operator=(const NPC&) = delete;
+    NPC(NPC&&) = delete;
+    NPC& operator=(NPC&&) = delete;
     
     // Update method implemented in main.cpp due to circular dependency with Player
     void update(float deltaTime, float terrainHeight, Player* player, float currentTime);
@@ -64,4 +76,7 @@ struct NPC {
     void updateHealthColor();
     bool canTakeDamage(float currentTime) const;
     void heal(int amount);
+    
+    // Helper to set up inverse bind matrices from shared model
+    void setupInverseBindMatrices(const Model& sharedModel);
 };

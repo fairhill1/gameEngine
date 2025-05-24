@@ -987,9 +987,6 @@ CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o: \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/src/skills.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/src/resources.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/src/npcs.h \
-  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.h \
-  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/camera.h \
-  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ui.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ozz_animation.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/animation.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/animation/runtime/export.h \
@@ -1015,4 +1012,7 @@ CMakeFiles/MyFirstCppGame.dir/src/main.cpp.o: \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/maths/soa_quaternion.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/containers/vector.h \
   /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/containers/std_allocator.h \
-  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/memory/allocator.h
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/deps/ozz-animation/include/ozz/base/memory/allocator.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/player.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/camera.h \
+  /Users/adne/Desktop/dev/myfirstcplusplusgame/src/ui.h

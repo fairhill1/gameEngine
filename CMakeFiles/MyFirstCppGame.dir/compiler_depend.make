@@ -2783,12 +2783,14 @@ CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__xlocale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_abort.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_assert.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_bounds.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctermid.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_locale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_mb_cur_max.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_printf.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_static_assert.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_stdio.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_stdlib.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_string.h \
@@ -2817,6 +2819,7 @@ CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/limits.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/signal.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/types.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/assert.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/adjacent_find.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/all_of.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/any_of.h \
@@ -3202,6 +3205,7 @@ CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/poll_with_backoff.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/support.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/support/pthread.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tree \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/find_index.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/ignore.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/make_tuple_types.h \
@@ -3357,6 +3361,7 @@ CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/atomic \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/bit \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/bitset \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cassert \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cctype \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cerrno \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/climits \
@@ -3388,6 +3393,7 @@ CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/limits \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/locale \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/locale.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/map \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/math.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/memory \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/mutex \
@@ -3571,6 +3577,8 @@ CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdarg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stddef.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/17/include/stdint.h \
+  deps/bgfx/include/bgfx/bgfx.h \
+  deps/bgfx/include/bgfx/defines.h \
   deps/bx/include/bx/bx.h \
   deps/bx/include/bx/config.h \
   deps/bx/include/bx/constants.h \
@@ -3590,7 +3598,34 @@ CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o: src/npcs.cpp \
   deps/bx/include/bx/simd_t.h \
   deps/bx/include/bx/typetraits.h \
   deps/bx/include/bx/uint32_t.h \
+  deps/ozz-animation/include/ozz/animation/runtime/animation.h \
+  deps/ozz-animation/include/ozz/animation/runtime/export.h \
+  deps/ozz-animation/include/ozz/animation/runtime/local_to_model_job.h \
+  deps/ozz-animation/include/ozz/animation/runtime/sampling_job.h \
+  deps/ozz-animation/include/ozz/animation/runtime/skeleton.h \
+  deps/ozz-animation/include/ozz/base/containers/std_allocator.h \
+  deps/ozz-animation/include/ozz/base/containers/vector.h \
+  deps/ozz-animation/include/ozz/base/export.h \
+  deps/ozz-animation/include/ozz/base/io/archive_traits.h \
+  deps/ozz-animation/include/ozz/base/maths/internal/simd_math_config.h \
+  deps/ozz-animation/include/ozz/base/maths/internal/simd_math_ref-inl.h \
+  deps/ozz-animation/include/ozz/base/maths/math_constant.h \
+  deps/ozz-animation/include/ozz/base/maths/math_ex.h \
+  deps/ozz-animation/include/ozz/base/maths/quaternion.h \
+  deps/ozz-animation/include/ozz/base/maths/simd_math.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_float.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_quaternion.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_transform.h \
+  deps/ozz-animation/include/ozz/base/maths/transform.h \
+  deps/ozz-animation/include/ozz/base/maths/vec_float.h \
+  deps/ozz-animation/include/ozz/base/memory/allocator.h \
+  deps/ozz-animation/include/ozz/base/platform.h \
+  deps/ozz-animation/include/ozz/base/span.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/export.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h \
+  src/model.h \
   src/npcs.h \
+  src/ozz_animation.h \
   src/player.h \
   src/skills.h
 
@@ -4433,12 +4468,14 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__wctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/__xlocale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_abort.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_assert.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_bounds.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctermid.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_ctype.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_locale.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_mb_cur_max.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_printf.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_static_assert.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_stdio.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_stdlib.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/_string.h \
@@ -4467,6 +4504,7 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/limits.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/signal.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/arm/types.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/assert.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/adjacent_find.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/all_of.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__algorithm/any_of.h \
@@ -4852,6 +4890,7 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/poll_with_backoff.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/support.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__thread/support/pthread.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tree \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/find_index.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/ignore.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__tuple/make_tuple_types.h \
@@ -5007,6 +5046,7 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/atomic \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/bit \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/bitset \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cassert \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cctype \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/cerrno \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/climits \
@@ -5038,6 +5078,7 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/limits \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/locale \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/locale.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/map \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/math.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/memory \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/mutex \
@@ -5242,7 +5283,34 @@ CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o: src/player.cpp \
   deps/bx/include/bx/simd_t.h \
   deps/bx/include/bx/typetraits.h \
   deps/bx/include/bx/uint32_t.h \
+  deps/ozz-animation/include/ozz/animation/runtime/animation.h \
+  deps/ozz-animation/include/ozz/animation/runtime/export.h \
+  deps/ozz-animation/include/ozz/animation/runtime/local_to_model_job.h \
+  deps/ozz-animation/include/ozz/animation/runtime/sampling_job.h \
+  deps/ozz-animation/include/ozz/animation/runtime/skeleton.h \
+  deps/ozz-animation/include/ozz/base/containers/std_allocator.h \
+  deps/ozz-animation/include/ozz/base/containers/vector.h \
+  deps/ozz-animation/include/ozz/base/export.h \
+  deps/ozz-animation/include/ozz/base/io/archive_traits.h \
+  deps/ozz-animation/include/ozz/base/maths/internal/simd_math_config.h \
+  deps/ozz-animation/include/ozz/base/maths/internal/simd_math_ref-inl.h \
+  deps/ozz-animation/include/ozz/base/maths/math_constant.h \
+  deps/ozz-animation/include/ozz/base/maths/math_ex.h \
+  deps/ozz-animation/include/ozz/base/maths/quaternion.h \
+  deps/ozz-animation/include/ozz/base/maths/simd_math.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_float.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_quaternion.h \
+  deps/ozz-animation/include/ozz/base/maths/soa_transform.h \
+  deps/ozz-animation/include/ozz/base/maths/transform.h \
+  deps/ozz-animation/include/ozz/base/maths/vec_float.h \
+  deps/ozz-animation/include/ozz/base/memory/allocator.h \
+  deps/ozz-animation/include/ozz/base/platform.h \
+  deps/ozz-animation/include/ozz/base/span.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/export.h \
+  deps/ozz-animation/include/ozz/geometry/runtime/skinning_job.h \
+  src/model.h \
   src/npcs.h \
+  src/ozz_animation.h \
   src/player.h \
   src/skills.h \
   src/ui.h

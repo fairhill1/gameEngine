@@ -473,7 +473,7 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
             auto weightsIt = primitive.attributes.find("WEIGHTS_0");
             
             if (jointsIt != primitive.attributes.end() && weightsIt != primitive.attributes.end()) {
-                fprintf(stderr, "SKINNING_DEBUG: Processing bone weights and indices\n");
+                // fprintf(stderr, "SKINNING_DEBUG: Processing bone weights and indices\n");
                 
                 // Process joint indices
                 const tinygltf::Accessor& jointsAccessor = gltfModel.accessors[jointsIt->second];
@@ -485,10 +485,10 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 const tinygltf::BufferView& weightsView = gltfModel.bufferViews[weightsAccessor.bufferView];
                 const tinygltf::Buffer& weightsBuffer = gltfModel.buffers[weightsView.buffer];
                 
-                fprintf(stderr, "SKINNING_DEBUG: Joints count=%zu, componentType=%d\n", 
-                       jointsAccessor.count, jointsAccessor.componentType);
-                fprintf(stderr, "SKINNING_DEBUG: Weights count=%zu, componentType=%d\n", 
-                       weightsAccessor.count, weightsAccessor.componentType);
+                // fprintf(stderr, "SKINNING_DEBUG: Joints count=%zu, componentType=%d\n", 
+                //        jointsAccessor.count, jointsAccessor.componentType);
+                // fprintf(stderr, "SKINNING_DEBUG: Weights count=%zu, componentType=%d\n", 
+                //        weightsAccessor.count, weightsAccessor.componentType);
                 
                 // Process bone indices and weights for each vertex
                 for (size_t i = 0; i < vertexCount && i < jointsAccessor.count && i < weightsAccessor.count; i++) {
@@ -531,18 +531,18 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                     
                     // Debug first few vertices' skinning data
                     if (i < 3) {
-                        fprintf(stderr, "SKINNING_DEBUG: Vertex %zu: joints=(%u,%u,%u,%u) weights=(%.3f,%.3f,%.3f,%.3f)\n", 
-                               i, vertices[i].boneIndices[0], vertices[i].boneIndices[1], 
-                               vertices[i].boneIndices[2], vertices[i].boneIndices[3],
-                               vertices[i].boneWeights[0], vertices[i].boneWeights[1], 
-                               vertices[i].boneWeights[2], vertices[i].boneWeights[3]);
+                        // fprintf(stderr, "SKINNING_DEBUG: Vertex %zu: joints=(%u,%u,%u,%u) weights=(%.3f,%.3f,%.3f,%.3f)\n", 
+                        //        i, vertices[i].boneIndices[0], vertices[i].boneIndices[1], 
+                        //        vertices[i].boneIndices[2], vertices[i].boneIndices[3],
+                        //        vertices[i].boneWeights[0], vertices[i].boneWeights[1], 
+                        //        vertices[i].boneWeights[2], vertices[i].boneWeights[3]);
                     }
                 }
                 
                 modelMesh.hasAnimation = true;
-                fprintf(stderr, "SKINNING_DEBUG: Mesh marked as having animation\n");
+                // fprintf(stderr, "SKINNING_DEBUG: Mesh marked as having animation\n");
             } else {
-                fprintf(stderr, "SKINNING_DEBUG: No bone weights/indices found, using defaults\n");
+                // fprintf(stderr, "SKINNING_DEBUG: No bone weights/indices found, using defaults\n");
             }
             
             // Store original vertices for animation if skinning is enabled
@@ -551,8 +551,8 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 modelMesh.animatedVertices.resize(vertices.size());
                 // Initialize with original vertex data
                 modelMesh.animatedVertices = vertices;
-                fprintf(stderr, "SKINNING_DEBUG: Stored %zu original vertices for animation\n", vertices.size());
-                fprintf(stderr, "SKINNING_DEBUG: Initialized %zu animated vertices\n", modelMesh.animatedVertices.size());
+                // fprintf(stderr, "SKINNING_DEBUG: Stored %zu original vertices for animation\n", vertices.size());
+                // fprintf(stderr, "SKINNING_DEBUG: Initialized %zu animated vertices\n", modelMesh.animatedVertices.size());
             }
             
             // Validate vertex data before creating buffer
@@ -1462,12 +1462,12 @@ void Model::updateWithOzzSkinning(OzzAnimationSystem& ozzSystem) {
         } else {
             // Debug: Check a few transformed positions
             if (vertexCount > 0) {
-                std::cout << "SKINNING_DEBUG: Before: vertex 0 pos=(" << inPositions[0] << "," << inPositions[1] << "," << inPositions[2] << ")" << std::endl;
-                std::cout << "SKINNING_DEBUG: After: vertex 0 pos=(" << outPositions[0] << "," << outPositions[1] << "," << outPositions[2] << ")" << std::endl;
-                if (vertexCount > 100) {
-                    std::cout << "SKINNING_DEBUG: Before: vertex 100 pos=(" << inPositions[300] << "," << inPositions[301] << "," << inPositions[302] << ")" << std::endl;
-                    std::cout << "SKINNING_DEBUG: After: vertex 100 pos=(" << outPositions[300] << "," << outPositions[301] << "," << outPositions[302] << ")" << std::endl;
-                }
+                // std::cout << "SKINNING_DEBUG: Before: vertex 0 pos=(" << inPositions[0] << "," << inPositions[1] << "," << inPositions[2] << ")" << std::endl;
+                // std::cout << "SKINNING_DEBUG: After: vertex 0 pos=(" << outPositions[0] << "," << outPositions[1] << "," << outPositions[2] << ")" << std::endl;
+                // if (vertexCount > 100) {
+                //     std::cout << "SKINNING_DEBUG: Before: vertex 100 pos=(" << inPositions[300] << "," << inPositions[301] << "," << inPositions[302] << ")" << std::endl;
+                //     std::cout << "SKINNING_DEBUG: After: vertex 100 pos=(" << outPositions[300] << "," << outPositions[301] << "," << outPositions[302] << ")" << std::endl;
+                // }
             }
             
             // Convert skinned results back to packed format
@@ -1500,7 +1500,7 @@ void Model::updateWithOzzSkinning(OzzAnimationSystem& ozzSystem) {
                 }
             }
             
-            std::cout << "Ozz skinning completed successfully for " << vertexCount << " vertices" << std::endl;
+            // std::cout << "Ozz skinning completed successfully for " << vertexCount << " vertices" << std::endl;
         }
         
         // Update the vertex buffer with transformed vertices using copy for safety

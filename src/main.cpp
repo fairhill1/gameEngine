@@ -699,7 +699,7 @@ public:
 private:
     std::unordered_map<uint64_t, std::unique_ptr<TerrainChunk>> loadedChunks;
     std::vector<ResourceNode>* worldResourceNodes; // Pointer to global resource nodes
-    std::vector<NPC>* worldNPCs; // Pointer to global NPCs
+    std::vector<std::unique_ptr<NPC>>* worldNPCs; // Pointer to global NPCs
     int playerChunkX = 0;
     int playerChunkZ = 0;
     
@@ -882,9 +882,9 @@ private:
                         else if (typeNoise < 0.4f) npcType = NPCType::VILLAGER;
                         else npcType = NPCType::WANDERER;
                         
-                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        float worldY = getHeightAt(worldX, worldZ) - 5.0f + 0.1f; // Mannequin spawn on ground
                         
-                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        worldNPCs->emplace_back(std::make_unique<NPC>(worldX, worldY, worldZ, npcType));
                         npcCount++;
                     }
                 }
@@ -904,9 +904,9 @@ private:
                         float worldZ = chunkWorldZ + offsetZ;
                         
                         NPCType npcType = (bx::sin(seed * 0.9f) > 0.3f) ? NPCType::WANDERER : NPCType::MERCHANT;
-                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        float worldY = getHeightAt(worldX, worldZ) - 5.0f + 0.1f; // Mannequin spawn on ground
                         
-                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        worldNPCs->emplace_back(std::make_unique<NPC>(worldX, worldY, worldZ, npcType));
                         npcCount++;
                     }
                 }
@@ -926,9 +926,9 @@ private:
                         float worldZ = chunkWorldZ + offsetZ;
                         
                         NPCType npcType = NPCType::WANDERER; // Only wanderers in mountains
-                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        float worldY = getHeightAt(worldX, worldZ) - 5.0f + 0.1f; // Mannequin spawn on ground
                         
-                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        worldNPCs->emplace_back(std::make_unique<NPC>(worldX, worldY, worldZ, npcType));
                         npcCount++;
                     }
                 }
@@ -948,9 +948,9 @@ private:
                         float worldZ = chunkWorldZ + offsetZ;
                         
                         NPCType npcType = NPCType::WANDERER; // Only wanderers in swamps
-                        float worldY = getHeightAt(worldX, worldZ) + 0.8f - 5.0f;
+                        float worldY = getHeightAt(worldX, worldZ) - 5.0f + 0.1f; // Mannequin spawn on ground
                         
-                        worldNPCs->emplace_back(worldX, worldY, worldZ, npcType);
+                        worldNPCs->emplace_back(std::make_unique<NPC>(worldX, worldY, worldZ, npcType));
                         npcCount++;
                     }
                 }
@@ -983,7 +983,7 @@ public:
     }
     
     // Set pointer to global NPCs vector
-    void setNPCsPointer(std::vector<NPC>* npcs) {
+    void setNPCsPointer(std::vector<std::unique_ptr<NPC>>* npcs) {
         worldNPCs = npcs;
     }
     
@@ -1714,6 +1714,7 @@ int main(int argc, char* argv[]) {
     // Create models
     Model gardenLampModel;
     Model mannequinModel;
+    Model sharedNPCModel;  // Shared model for all NPCs
     
     // Create animation system
     OzzAnimationSystem ozzAnimSystem;
@@ -1857,6 +1858,15 @@ int main(int argc, char* argv[]) {
         mannequinModel.setFallbackTexture(proceduralTexture);
     }
     
+    // Load shared NPC model (same as player but separate instance for NPCs)
+    std::cout << "Loading shared NPC model..." << std::endl;
+    if (!sharedNPCModel.loadFromFile(mannequinPath)) {
+        std::cerr << "Failed to load shared NPC model!" << std::endl;
+    } else {
+        std::cout << "Shared NPC model loaded successfully!" << std::endl;
+        sharedNPCModel.setFallbackTexture(proceduralTexture);
+    }
+    
     // Load ozz animation files
     std::cout << "Loading ozz animation system..." << std::endl;
     const char* skeletonPath = "build/assets/skeleton.ozz";
@@ -1997,6 +2007,41 @@ int main(int argc, char* argv[]) {
         std::cerr << "Animation will not work correctly without proper inverse bind matrices." << std::endl;
     }
     
+    // Set up joint mapping for shared NPC model (same as player)
+    std::cout << "Setting up joint mapping for shared NPC model..." << std::endl;
+    std::vector<float> npcInverseBindMatrices;
+    if (sharedNPCModel.getInverseBindMatrices(npcInverseBindMatrices)) {
+        int numGltfJoints = npcInverseBindMatrices.size() / 16;
+        auto ozzJointNames = ozzAnimSystem.getJointNames();
+        
+        // Create joint mapping (same logic as player)
+        std::vector<int> gltfToOzzMapping(numGltfJoints, -1);
+        int mappedCount = 0;
+        
+        if (!sharedNPCModel.skins.empty()) {
+            const auto& skin = sharedNPCModel.skins[0];
+            for (int skinIdx = 0; skinIdx < (int)skin.jointIndices.size(); skinIdx++) {
+                int nodeIndex = skin.jointIndices[skinIdx];
+                if (nodeIndex < (int)sharedNPCModel.nodes.size()) {
+                    const std::string& gltfName = sharedNPCModel.nodes[nodeIndex].name;
+                    // Skip first 2 ozz joints (Armature, Ch36) - start from Hips
+                    for (int ozzIdx = 2; ozzIdx < (int)ozzJointNames.size(); ozzIdx++) {
+                        if (gltfName == ozzJointNames[ozzIdx]) {
+                            gltfToOzzMapping[skinIdx] = ozzIdx;
+                            mappedCount++;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        sharedNPCModel.remapBoneIndices(gltfToOzzMapping);
+        std::cout << "Shared NPC model joint mapping complete: " << mappedCount << "/" << numGltfJoints << " joints mapped" << std::endl;
+    } else {
+        std::cerr << "Failed to extract inverse bind matrices from shared NPC model!" << std::endl;
+    }
+    
     // Load shaders
     std::cout << "Loading shaders..." << std::endl;
     
@@ -2095,7 +2140,7 @@ int main(int argc, char* argv[]) {
     std::vector<ResourceNode> resourceNodes;
     
     // Create NPCs vector (will be populated by procedural generation)
-    std::vector<NPC> npcs;
+    std::vector<std::unique_ptr<NPC>> npcs;
     
     // Connect ChunkManager to resource nodes and NPCs for procedural generation
     chunkManager.setResourceNodesPointer(&resourceNodes);
@@ -2107,6 +2152,15 @@ int main(int argc, char* argv[]) {
     
     std::cout << "Initial world generation complete. Total resource nodes: " << resourceNodes.size() 
               << ", Total NPCs: " << npcs.size() << std::endl;
+    
+    // Set up inverse bind matrices for all NPCs now that they exist
+    std::cout << "Setting up inverse bind matrices for " << npcs.size() << " NPCs..." << std::endl;
+    for (auto& npcPtr : npcs) {
+        if (npcPtr) {
+            npcPtr->setupInverseBindMatrices(sharedNPCModel);
+        }
+    }
+    
     std::cout << "Starting main loop..." << std::endl;
     std::cout << "===== Controls =====" << std::endl;
     std::cout << "WASD - Move camera" << std::endl;
@@ -2322,8 +2376,9 @@ int main(int argc, char* argv[]) {
             float closestNPCDist = FLT_MAX;
             NPC* clickedNPC = nullptr;
             
-            for (auto& npc : npcs) {
-                if (!npc.isActive) continue;
+            for (auto& npcPtr : npcs) {
+                if (!npcPtr || !npcPtr->isActive) continue;
+                auto& npc = *npcPtr;
                 
                 // Ray-sphere intersection test
                 bx::Vec3 toNPC = {
@@ -2349,7 +2404,7 @@ int main(int argc, char* argv[]) {
                 // Check if within NPC's bounding sphere
                 if (distToNPC <= npc.size * 1.5f && projDist < closestNPCDist) {
                     closestNPCDist = projDist;
-                    clickedNPC = &npc;
+                    clickedNPC = npcPtr.get();
                 }
             }
             
@@ -2439,8 +2494,9 @@ int main(int argc, char* argv[]) {
         float closestNPCDist = FLT_MAX;
         NPC* hoveredNPC = nullptr;
         
-        for (auto& npc : npcs) {
-            if (!npc.isActive) continue;
+        for (auto& npcPtr : npcs) {
+            if (!npcPtr || !npcPtr->isActive) continue;
+            auto& npc = *npcPtr;
             
             // Simple ray-sphere intersection test
             bx::Vec3 toNPC = {
@@ -2466,7 +2522,7 @@ int main(int argc, char* argv[]) {
             // Check if within NPC's bounding sphere (size * 2 for easier hovering)
             if (distToNPC <= npc.size * 2.0f && projDist < closestNPCDist) {
                 closestNPCDist = projDist;
-                hoveredNPC = &npc;
+                hoveredNPC = npcPtr.get();
             }
         }
         
@@ -2538,10 +2594,10 @@ int main(int argc, char* argv[]) {
                     int numBones = ozzAnimSystem.getNumBones();
                     static std::vector<float> boneMatrices;
                     // Pure ozz-animation - no need for old bone matrix calculation
-                    std::cout << "Using pure ozz-animation system" << std::endl;
+                    // std::cout << "Using pure ozz-animation system" << std::endl;
                     
                     // Debug: Check if we're calling the vertex transformation
-                    std::cout << "Calling ozz native skinning with " << numBones << " bones" << std::endl;
+                    // std::cout << "Calling ozz native skinning with " << numBones << " bones" << std::endl;
                     
                     // DEBUG: Test with NO animation to see bind pose
                     static bool enableAnimation = true; // Re-enabled to debug animation system
@@ -2551,7 +2607,7 @@ int main(int argc, char* argv[]) {
                     }
                     // When enableAnimation = false, model should show in bind pose without deformation
                     
-                    std::cout << "Ozz skinning completed" << std::endl;
+                    // std::cout << "Ozz skinning completed" << std::endl;
                     
                     lastUpdateTime = time;
                 }
@@ -2651,60 +2707,41 @@ int main(int argc, char* argv[]) {
         }
         
         // Update and render NPCs
-        for (auto& npc : npcs) {
-            if (!npc.isActive) continue;
+        static int globalFrameCounter = 0;
+        globalFrameCounter++;
+        
+        for (auto& npcPtr : npcs) {
+            if (!npcPtr || !npcPtr->isActive) continue;
+            auto& npc = *npcPtr;
             
             // Update NPC AI
             float npcTerrainHeight = chunkManager.getHeightAt(npc.position.x, npc.position.z);
             npc.update(deltaTime, npcTerrainHeight, &player, time);
             npc.updateHealthColor(); // Ensure color is updated for flash effect
             
-            // Render NPC
+            // Render NPC mannequin model
             float npcMatrix[16], npcTranslation[16], npcScale[16];
             bx::mtxScale(npcScale, npc.size, npc.size, npc.size);
             bx::mtxTranslate(npcTranslation, npc.position.x, npc.position.y, npc.position.z);
             bx::mtxMul(npcMatrix, npcScale, npcTranslation);
             
-            // Create dynamic vertex buffer with current color
-            PosColorVertex npcVertices[8];
+            // Animation LOD: Only animate nearby NPCs, and skip frames for performance
+            float distanceToCamera = bx::length(bx::sub(npc.position, camera.position));
+            const float ANIMATION_DISTANCE = 50.0f; // Only animate NPCs within 50 units
+            bool shouldAnimate = (distanceToCamera < ANIMATION_DISTANCE) && 
+                               (globalFrameCounter % 2 == 0); // Update every 2nd frame
             
-            // Copy base vertex data from appropriate type
-            const PosColorVertex* baseVertices = nullptr;
-            switch (npc.type) {
-                case NPCType::WANDERER:
-                    baseVertices = wandererCubeVertices;
-                    break;
-                case NPCType::VILLAGER:
-                    baseVertices = villagerCubeVertices;
-                    break;
-                case NPCType::MERCHANT:
-                    baseVertices = merchantCubeVertices;
-                    break;
-                default:
-                    baseVertices = wandererCubeVertices;
-                    break;
+            if (npc.ozzAnimSystem.isLoaded() && shouldAnimate) {
+                sharedNPCModel.updateWithOzzSkinning(npc.ozzAnimSystem);
             }
+            // Distant/skipped NPCs use the model in its last animated state
             
-            // Apply hit flash color or health-based color
-            for (int i = 0; i < 8; i++) {
-                npcVertices[i] = baseVertices[i];
-                // Override color with dynamic color (includes hit flash)
-                npcVertices[i].abgr = npc.color;
-            }
+            // Set state for animated textured objects
+            uint64_t objState = BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z 
+                              | BGFX_STATE_DEPTH_TEST_LESS | BGFX_STATE_MSAA;
+            bgfx::setState(objState);
             
-            // Create transient vertex buffer with current color
-            bgfx::TransientVertexBuffer tvb;
-            bgfx::allocTransientVertexBuffer(&tvb, 8, layout);
-            bx::memCopy(tvb.data, npcVertices, sizeof(npcVertices));
-            
-            // Set vertex buffer and render
-            bgfx::setVertexBuffer(0, &tvb);
-            bgfx::setIndexBuffer(ibh);
-            uint64_t npcState = BGFX_STATE_DEFAULT;
-            npcState &= ~BGFX_STATE_CULL_MASK;
-            bgfx::setState(npcState);
-            bgfx::setTransform(npcMatrix);
-            bgfx::submit(0, program);
+            sharedNPCModel.render(texProgram, s_texColor, npcMatrix);
         }
         
         // Set state for test cubes (with culling disabled for spinning cubes)
@@ -2820,6 +2857,7 @@ int main(int argc, char* argv[]) {
     
     gardenLampModel.unload();
     mannequinModel.unload();
+    sharedNPCModel.unload();
     
     bgfx::shutdown();
     SDL_DestroyWindow(window);
