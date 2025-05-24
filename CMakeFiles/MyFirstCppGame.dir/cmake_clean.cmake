@@ -7,6 +7,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/MyFirstCppGame.dir/src/model.cpp.o.d"
   "CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o"
   "CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.o.d"
+  "CMakeFiles/MyFirstCppGame.dir/src/ozz_animation.cpp.o"
+  "CMakeFiles/MyFirstCppGame.dir/src/ozz_animation.cpp.o.d"
   "CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o"
   "CMakeFiles/MyFirstCppGame.dir/src/player.cpp.o.d"
   "CMakeFiles/MyFirstCppGame.dir/src/resources.cpp.o"

@@ -37,6 +37,7 @@ set(SOURCES
     src/player.cpp
     src/camera.cpp
     src/ui.cpp
+    src/ozz_animation.cpp
 )
 
 # Create executable
@@ -51,6 +52,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${BGFX_DIR}/bx/include/compat/osx
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/stb
     ${CMAKE_CURRENT_SOURCE_DIR}/deps/tinygltf
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
@@ -60,6 +62,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${BGFX_DIR}/bgfx/.build/osx-arm64/bin/libbgfxRelease.a
     ${BGFX_DIR}/bgfx/.build/osx-arm64/bin/libbxRelease.a
     ${BGFX_DIR}/bgfx/.build/osx-arm64/bin/libbimgRelease.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/build/src/animation/runtime/libozz_animation_r.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/build/src/animation/offline/libozz_animation_offline_r.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/ozz-animation/build/src/base/libozz_base_r.a
 )
 
 # Add framework dependencies for macOS

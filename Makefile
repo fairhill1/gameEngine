@@ -228,6 +228,30 @@ src/npcs.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/npcs.cpp.s
 .PHONY : src/npcs.cpp.s
 
+src/ozz_animation.o: src/ozz_animation.cpp.o
+.PHONY : src/ozz_animation.o
+
+# target to build an object file
+src/ozz_animation.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/ozz_animation.cpp.o
+.PHONY : src/ozz_animation.cpp.o
+
+src/ozz_animation.i: src/ozz_animation.cpp.i
+.PHONY : src/ozz_animation.i
+
+# target to preprocess a source file
+src/ozz_animation.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/ozz_animation.cpp.i
+.PHONY : src/ozz_animation.cpp.i
+
+src/ozz_animation.s: src/ozz_animation.cpp.s
+.PHONY : src/ozz_animation.s
+
+# target to generate assembly for a file
+src/ozz_animation.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/MyFirstCppGame.dir/build.make CMakeFiles/MyFirstCppGame.dir/src/ozz_animation.cpp.s
+.PHONY : src/ozz_animation.cpp.s
+
 src/player.o: src/player.cpp.o
 .PHONY : src/player.o
 
@@ -345,6 +369,9 @@ help:
 	@echo "... src/npcs.o"
 	@echo "... src/npcs.i"
 	@echo "... src/npcs.s"
+	@echo "... src/ozz_animation.o"
+	@echo "... src/ozz_animation.i"
+	@echo "... src/ozz_animation.s"
 	@echo "... src/player.o"
 	@echo "... src/player.i"
 	@echo "... src/player.s"

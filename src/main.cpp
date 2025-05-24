@@ -51,6 +51,7 @@ namespace tinygltf {
 #include "player.h"
 #include "camera.h"
 #include "ui.h"
+#include "ozz_animation.h"
 
 // Window dimensions
 const int WINDOW_WIDTH = 800;
@@ -1714,6 +1715,9 @@ int main(int argc, char* argv[]) {
     Model gardenLampModel;
     Model mannequinModel;
     
+    // Create animation system
+    OzzAnimationSystem ozzAnimSystem;
+    
     // Create window
     std::cout << "Creating window..." << std::endl;
     SDL_Window* window = SDL_CreateWindow(WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
@@ -1851,6 +1855,23 @@ int main(int argc, char* argv[]) {
     } else {
         std::cout << "Mannequin model loaded successfully!" << std::endl;
         mannequinModel.setFallbackTexture(proceduralTexture);
+    }
+    
+    // Load ozz animation files
+    std::cout << "Loading ozz animation system..." << std::endl;
+    const char* skeletonPath = "build/assets/skeleton.ozz";
+    const char* animationPath = "build/assets/Armature_mixamo.com_Layer0.002.ozz";
+    
+    if (!ozzAnimSystem.loadSkeleton(skeletonPath)) {
+        std::cerr << "Failed to load ozz skeleton!" << std::endl;
+    } else {
+        std::cout << "Ozz skeleton loaded successfully!" << std::endl;
+    }
+    
+    if (!ozzAnimSystem.loadAnimation(animationPath)) {
+        std::cerr << "Failed to load ozz animation!" << std::endl;
+    } else {
+        std::cout << "Ozz animation loaded successfully!" << std::endl;
     }
     
     // Load shaders
@@ -2229,29 +2250,16 @@ int main(int argc, char* argv[]) {
         // Update player and chunks
         player.update(chunkManager, time, deltaTime);
         
-        // Update player animation
-        player.animationTime += deltaTime;
-        if (player.animationLoop && mannequinModel.hasAnimations()) {
-            const auto* anim = mannequinModel.getAnimation(player.currentAnimation);
-            if (anim && player.animationTime > anim->duration) {
-                player.animationTime = fmod(player.animationTime, anim->duration);
-            }
+        // Update player animation using ozz-animation
+        if (player.animationLoop) {
+            ozzAnimSystem.updateAnimation(deltaTime);
             
             // Debug: Print animation progress every 2 seconds
             static float lastDebugTime = 0.0f;
             if (time - lastDebugTime > 2.0f) {
-                std::cout << "Animation: " << player.currentAnimation << " Time: " << player.animationTime 
-                          << "/" << (anim ? anim->duration : 0.0f) << "s" << std::endl;
+                std::cout << "Ozz Animation Time: " << ozzAnimSystem.getAnimationTime() 
+                          << "/" << ozzAnimSystem.getAnimationDuration() << "s" << std::endl;
                 lastDebugTime = time;
-                
-                // Test bone matrix calculation
-                static std::vector<float*> boneMatrices;
-                mannequinModel.calculateBoneMatrices(player.currentAnimation, player.animationTime, boneMatrices);
-                std::cout << "  Calculated " << boneMatrices.size() << " bone matrices" << std::endl;
-                
-                // Test animated vertex update
-                mannequinModel.updateAnimatedVertices(player.currentAnimation, player.animationTime);
-                std::cout << "  Updated animated vertices" << std::endl;
             }
         }
         
@@ -2361,6 +2369,34 @@ int main(int argc, char* argv[]) {
         
         // Render player as mannequin model
         if (mannequinModel.hasAnyMeshes()) {
+            // Enable animation system with optimized vertex transformation
+            if (ozzAnimSystem.isLoaded()) {
+                // Try processing animation at a lower frequency to reduce CPU load
+                static float lastUpdateTime = 0.0f;
+                static float updateInterval = 0.033f; // Update at ~30 FPS instead of 60 FPS
+                
+                if (time - lastUpdateTime >= updateInterval) {
+                    int numBones = ozzAnimSystem.getNumBones();
+                    static std::vector<float> boneMatrices;
+                    if (boneMatrices.size() != numBones * 16) {
+                        boneMatrices.resize(numBones * 16);
+                        std::cout << "Resized bone matrices for " << numBones << " bones" << std::endl;
+                    }
+                    
+                    ozzAnimSystem.calculateBoneMatrices(boneMatrices.data(), numBones);
+                    
+                    // Debug: Check if we're calling the vertex transformation
+                    std::cout << "Calling updateWithOzzBoneMatrices with " << numBones << " bones" << std::endl;
+                    
+                    // Try the vertex transformation at lower frequency
+                    mannequinModel.updateWithOzzBoneMatrices(boneMatrices.data(), numBones);
+                    
+                    std::cout << "Vertex transformation completed" << std::endl;
+                    
+                    lastUpdateTime = time;
+                }
+            }
+            
             float playerMatrix[16], playerTranslation[16], playerScale[16], playerRotation[16];
             bx::mtxScale(playerScale, 1.0f, 1.0f, 1.0f);  // Default scale for mannequin
             bx::mtxRotateY(playerRotation, player.rotation);  // Apply Y-axis rotation

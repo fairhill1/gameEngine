@@ -318,6 +318,16 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                 vertices[i].normal = encodeNormalRgba8(0.0f, 1.0f, 0.0f); // Default up normal
                 vertices[i].texcoord[0] = 0; // int16_t default
                 vertices[i].texcoord[1] = 0; // int16_t default
+                
+                // Initialize bone data to defaults (no skinning)
+                vertices[i].boneIndices[0] = 0;
+                vertices[i].boneIndices[1] = 0;
+                vertices[i].boneIndices[2] = 0;
+                vertices[i].boneIndices[3] = 0;
+                vertices[i].boneWeights[0] = 1.0f; // First bone gets all weight
+                vertices[i].boneWeights[1] = 0.0f;
+                vertices[i].boneWeights[2] = 0.0f;
+                vertices[i].boneWeights[3] = 0.0f;
             }
             
             // Extract position data from separate buffer view (tightly packed)
@@ -455,6 +465,93 @@ bool Model::processGltfModel(const tinygltf::Model& gltfModel) {
                         fprintf(stderr, "WARNING: Texture coordinate buffer bounds exceeded at vertex %zu\n", i);
                     }
                 }
+            }
+            
+            // Process bone weights and indices for skinning
+            auto jointsIt = primitive.attributes.find("JOINTS_0");
+            auto weightsIt = primitive.attributes.find("WEIGHTS_0");
+            
+            if (jointsIt != primitive.attributes.end() && weightsIt != primitive.attributes.end()) {
+                fprintf(stderr, "SKINNING_DEBUG: Processing bone weights and indices\n");
+                
+                // Process joint indices
+                const tinygltf::Accessor& jointsAccessor = gltfModel.accessors[jointsIt->second];
+                const tinygltf::BufferView& jointsView = gltfModel.bufferViews[jointsAccessor.bufferView];
+                const tinygltf::Buffer& jointsBuffer = gltfModel.buffers[jointsView.buffer];
+                
+                // Process weights
+                const tinygltf::Accessor& weightsAccessor = gltfModel.accessors[weightsIt->second];
+                const tinygltf::BufferView& weightsView = gltfModel.bufferViews[weightsAccessor.bufferView];
+                const tinygltf::Buffer& weightsBuffer = gltfModel.buffers[weightsView.buffer];
+                
+                fprintf(stderr, "SKINNING_DEBUG: Joints count=%zu, componentType=%d\n", 
+                       jointsAccessor.count, jointsAccessor.componentType);
+                fprintf(stderr, "SKINNING_DEBUG: Weights count=%zu, componentType=%d\n", 
+                       weightsAccessor.count, weightsAccessor.componentType);
+                
+                // Process bone indices and weights for each vertex
+                for (size_t i = 0; i < vertexCount && i < jointsAccessor.count && i < weightsAccessor.count; i++) {
+                    // Process joint indices (typically uint8_t or uint16_t)
+                    size_t jointsOffset = jointsView.byteOffset + jointsAccessor.byteOffset + i * 4;
+                    if (jointsOffset + 4 <= jointsBuffer.data.size()) {
+                        if (jointsAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
+                            const uint8_t* joints = reinterpret_cast<const uint8_t*>(&jointsBuffer.data[jointsOffset]);
+                            vertices[i].boneIndices[0] = joints[0];
+                            vertices[i].boneIndices[1] = joints[1];
+                            vertices[i].boneIndices[2] = joints[2];
+                            vertices[i].boneIndices[3] = joints[3];
+                        } else if (jointsAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
+                            const uint16_t* joints = reinterpret_cast<const uint16_t*>(&jointsBuffer.data[jointsOffset]);
+                            vertices[i].boneIndices[0] = (uint8_t)joints[0];
+                            vertices[i].boneIndices[1] = (uint8_t)joints[1];
+                            vertices[i].boneIndices[2] = (uint8_t)joints[2];
+                            vertices[i].boneIndices[3] = (uint8_t)joints[3];
+                        }
+                    }
+                    
+                    // Process weights (typically float)
+                    size_t weightsOffset = weightsView.byteOffset + weightsAccessor.byteOffset + i * 16; // 4 floats
+                    if (weightsOffset + 16 <= weightsBuffer.data.size()) {
+                        const float* weights = reinterpret_cast<const float*>(&weightsBuffer.data[weightsOffset]);
+                        vertices[i].boneWeights[0] = weights[0];
+                        vertices[i].boneWeights[1] = weights[1];
+                        vertices[i].boneWeights[2] = weights[2];
+                        vertices[i].boneWeights[3] = weights[3];
+                        
+                        // Normalize weights to ensure they sum to 1.0
+                        float weightSum = weights[0] + weights[1] + weights[2] + weights[3];
+                        if (weightSum > 0.0f) {
+                            vertices[i].boneWeights[0] /= weightSum;
+                            vertices[i].boneWeights[1] /= weightSum;
+                            vertices[i].boneWeights[2] /= weightSum;
+                            vertices[i].boneWeights[3] /= weightSum;
+                        }
+                    }
+                    
+                    // Debug first few vertices' skinning data
+                    if (i < 3) {
+                        fprintf(stderr, "SKINNING_DEBUG: Vertex %zu: joints=(%u,%u,%u,%u) weights=(%.3f,%.3f,%.3f,%.3f)\n", 
+                               i, vertices[i].boneIndices[0], vertices[i].boneIndices[1], 
+                               vertices[i].boneIndices[2], vertices[i].boneIndices[3],
+                               vertices[i].boneWeights[0], vertices[i].boneWeights[1], 
+                               vertices[i].boneWeights[2], vertices[i].boneWeights[3]);
+                    }
+                }
+                
+                modelMesh.hasAnimation = true;
+                fprintf(stderr, "SKINNING_DEBUG: Mesh marked as having animation\n");
+            } else {
+                fprintf(stderr, "SKINNING_DEBUG: No bone weights/indices found, using defaults\n");
+            }
+            
+            // Store original vertices for animation if skinning is enabled
+            if (modelMesh.hasAnimation) {
+                modelMesh.originalVertices = vertices;
+                modelMesh.animatedVertices.resize(vertices.size());
+                // Initialize with original vertex data
+                modelMesh.animatedVertices = vertices;
+                fprintf(stderr, "SKINNING_DEBUG: Stored %zu original vertices for animation\n", vertices.size());
+                fprintf(stderr, "SKINNING_DEBUG: Initialized %zu animated vertices\n", modelMesh.animatedVertices.size());
             }
             
             // Validate vertex data before creating buffer
@@ -1041,11 +1138,64 @@ void Model::calculateBoneMatrices(const std::string& animationName, float time, 
             boneMatrices[i] = matrix;
         }
         
-        // For now, just use the bind matrix (this will show the T-pose)
-        // TODO: Apply animation transforms
-        for (int j = 0; j < 16; j++) {
-            matrix[j] = joint.bindMatrix[j];
+        // Apply animation transforms by interpolating keyframes
+        float translation[3] = {0.0f, 0.0f, 0.0f};
+        float rotation[4] = {0.0f, 0.0f, 0.0f, 1.0f}; // w=1 for identity quaternion
+        float scale[3] = {1.0f, 1.0f, 1.0f};
+        
+        // Debug: Check if we find any channels for this node
+        bool foundChannel = false;
+        
+        // Find and interpolate animation channels for this node
+        for (const auto& channel : anim->channels) {
+            if (channel.nodeIndex == nodeIndex && !channel.keyframes.empty()) {
+                foundChannel = true;
+                // Find the right keyframe(s) for the current time
+                size_t keyIndex = 0;
+                for (size_t k = 0; k < channel.keyframes.size() - 1; k++) {
+                    if (time >= channel.keyframes[k].time && time < channel.keyframes[k + 1].time) {
+                        keyIndex = k;
+                        break;
+                    }
+                }
+                
+                // For now, just use the keyframe values without interpolation
+                const auto& keyframe = channel.keyframes[keyIndex];
+                if (channel.path == "translation" && keyframe.values.size() >= 3) {
+                    translation[0] = keyframe.values[0];
+                    translation[1] = keyframe.values[1];
+                    translation[2] = keyframe.values[2];
+                } else if (channel.path == "rotation" && keyframe.values.size() >= 4) {
+                    rotation[0] = keyframe.values[0];
+                    rotation[1] = keyframe.values[1];
+                    rotation[2] = keyframe.values[2];
+                    rotation[3] = keyframe.values[3];
+                } else if (channel.path == "scale" && keyframe.values.size() >= 3) {
+                    scale[0] = keyframe.values[0];
+                    scale[1] = keyframe.values[1];
+                    scale[2] = keyframe.values[2];
+                }
+            }
         }
+        
+        // Debug output for first few bones
+        if (i < 3) {
+            fprintf(stderr, "BONE_DEBUG: Joint %zu (node %d): foundChannel=%s, translation=(%.3f,%.3f,%.3f)\n", 
+                   i, nodeIndex, foundChannel ? "YES" : "NO", translation[0], translation[1], translation[2]);
+        }
+        
+        // Create transformation matrix from TRS (focusing on rotation for idle animations)
+        // Convert quaternion to rotation matrix
+        float x = rotation[0], y = rotation[1], z = rotation[2], w = rotation[3];
+        float xx = x*x, yy = y*y, zz = z*z;
+        float xy = x*y, xz = x*z, yz = y*z;
+        float wx = w*x, wy = w*y, wz = w*z;
+        
+        // Build rotation matrix with translation
+        matrix[0] = 1.0f - 2.0f*(yy + zz); matrix[4] = 2.0f*(xy - wz);       matrix[8] = 2.0f*(xz + wy);       matrix[12] = translation[0];
+        matrix[1] = 2.0f*(xy + wz);       matrix[5] = 1.0f - 2.0f*(xx + zz); matrix[9] = 2.0f*(yz - wx);       matrix[13] = translation[1];
+        matrix[2] = 2.0f*(xz - wy);       matrix[6] = 2.0f*(yz + wx);       matrix[10] = 1.0f - 2.0f*(xx + yy); matrix[14] = translation[2];
+        matrix[3] = 0.0f;                matrix[7] = 0.0f;                matrix[11] = 0.0f;                matrix[15] = 1.0f;
     }
 }
 
@@ -1055,11 +1205,117 @@ void Model::updateNodeMatrix(int nodeIndex, const std::string& animationName, fl
 }
 
 void Model::updateAnimatedVertices(const std::string& animationName, float time) {
-    // For now, just copy original vertices to animated vertices
-    // This proves the system works even though it won't animate yet
+    // Calculate bone matrices for the given animation and time
+    std::vector<float*> boneMatrices;
+    calculateBoneMatrices(animationName, time, boneMatrices);
+    
+    // Transform vertices using bone matrices
     for (auto& mesh : meshes) {
         if (mesh.hasAnimation && !mesh.originalVertices.empty()) {
-            mesh.animatedVertices = mesh.originalVertices;
+            mesh.animatedVertices.resize(mesh.originalVertices.size());
+            
+            // Transform each vertex
+            for (size_t i = 0; i < mesh.originalVertices.size(); i++) {
+                const auto& originalVertex = mesh.originalVertices[i];
+                auto& animatedVertex = mesh.animatedVertices[i];
+                
+                // Copy non-transformed data
+                animatedVertex.normal = originalVertex.normal;
+                animatedVertex.texcoord[0] = originalVertex.texcoord[0];
+                animatedVertex.texcoord[1] = originalVertex.texcoord[1];
+                animatedVertex.boneIndices[0] = originalVertex.boneIndices[0];
+                animatedVertex.boneIndices[1] = originalVertex.boneIndices[1];
+                animatedVertex.boneIndices[2] = originalVertex.boneIndices[2];
+                animatedVertex.boneIndices[3] = originalVertex.boneIndices[3];
+                animatedVertex.boneWeights[0] = originalVertex.boneWeights[0];
+                animatedVertex.boneWeights[1] = originalVertex.boneWeights[1];
+                animatedVertex.boneWeights[2] = originalVertex.boneWeights[2];
+                animatedVertex.boneWeights[3] = originalVertex.boneWeights[3];
+                
+                // Start with original position
+                float transformedPos[3] = {
+                    originalVertex.position[0],
+                    originalVertex.position[1], 
+                    originalVertex.position[2]
+                };
+                
+                // Real skeletal animation using actual glTF animation keyframes
+                if (!boneMatrices.empty()) {
+                    transformedPos[0] = 0.0f;
+                    transformedPos[1] = 0.0f;
+                    transformedPos[2] = 0.0f;
+                    
+                    // Apply weighted bone transformations using real animation data
+                    for (int boneIdx = 0; boneIdx < 4; boneIdx++) {
+                        float weight = originalVertex.boneWeights[boneIdx];
+                        if (weight > 0.0001f) {
+                            uint8_t jointIndex = originalVertex.boneIndices[boneIdx];
+                            
+                            if (jointIndex < boneMatrices.size() && boneMatrices[jointIndex] != nullptr) {
+                                const float* boneMatrix = boneMatrices[jointIndex];
+                                
+                                // Transform position using real bone matrix
+                                float x = originalVertex.position[0];
+                                float y = originalVertex.position[1];
+                                float z = originalVertex.position[2];
+                                
+                                // Apply transformation but scale it down to prevent explosion
+                                float scale = 0.1f; // Reduce impact to debug
+                                float transformedX = (boneMatrix[0] * x + boneMatrix[4] * y + boneMatrix[8] * z + boneMatrix[12]) * scale;
+                                float transformedY = (boneMatrix[1] * x + boneMatrix[5] * y + boneMatrix[9] * z + boneMatrix[13]) * scale;
+                                float transformedZ = (boneMatrix[2] * x + boneMatrix[6] * y + boneMatrix[10] * z + boneMatrix[14]) * scale;
+                                
+                                transformedPos[0] += transformedX * weight;
+                                transformedPos[1] += transformedY * weight;
+                                transformedPos[2] += transformedZ * weight;
+                            }
+                        }
+                    }
+                    
+                    // Add back original position (mix between original and transformed)
+                    float mixFactor = 0.9f; // Mostly original position to start
+                    transformedPos[0] = originalVertex.position[0] * mixFactor + transformedPos[0] * (1.0f - mixFactor);
+                    transformedPos[1] = originalVertex.position[1] * mixFactor + transformedPos[1] * (1.0f - mixFactor);
+                    transformedPos[2] = originalVertex.position[2] * mixFactor + transformedPos[2] * (1.0f - mixFactor);
+                } else if (false && !boneMatrices.empty() && originalVertex.boneWeights[0] < 1.0f) {
+                    transformedPos[0] = 0.0f;
+                    transformedPos[1] = 0.0f;
+                    transformedPos[2] = 0.0f;
+                    
+                    // Apply weighted bone transformations
+                    for (int boneIdx = 0; boneIdx < 4; boneIdx++) {
+                        float weight = originalVertex.boneWeights[boneIdx];
+                        if (weight > 0.0001f) { // Only process significant weights
+                            uint8_t jointIndex = originalVertex.boneIndices[boneIdx];
+                            
+                            // Ensure joint index is valid
+                            if (jointIndex < boneMatrices.size() && boneMatrices[jointIndex] != nullptr) {
+                                const float* boneMatrix = boneMatrices[jointIndex];
+                                
+                                // Transform the original position by the bone matrix
+                                float x = originalVertex.position[0];
+                                float y = originalVertex.position[1];
+                                float z = originalVertex.position[2];
+                                
+                                // Apply 4x4 matrix transformation (positions are 3D with w=1)
+                                float transformedX = boneMatrix[0] * x + boneMatrix[4] * y + boneMatrix[8] * z + boneMatrix[12];
+                                float transformedY = boneMatrix[1] * x + boneMatrix[5] * y + boneMatrix[9] * z + boneMatrix[13];
+                                float transformedZ = boneMatrix[2] * x + boneMatrix[6] * y + boneMatrix[10] * z + boneMatrix[14];
+                                
+                                // Add weighted contribution
+                                transformedPos[0] += transformedX * weight;
+                                transformedPos[1] += transformedY * weight;
+                                transformedPos[2] += transformedZ * weight;
+                            }
+                        }
+                    }
+                }
+                
+                // Set the transformed position
+                animatedVertex.position[0] = transformedPos[0];
+                animatedVertex.position[1] = transformedPos[1];
+                animatedVertex.position[2] = transformedPos[2];
+            }
             
             // Update the vertex buffer with animated vertices
             if (bgfx::isValid(mesh.vertexBuffer)) {
@@ -1072,5 +1328,151 @@ void Model::updateAnimatedVertices(const std::string& animationName, float time)
                 PosNormalTexcoordVertex::ms_layout
             );
         }
+    }
+}
+
+void Model::updateWithOzzBoneMatrices(const float* boneMatrices, size_t boneCount) {
+    if (!boneMatrices || boneCount == 0) {
+        std::cout << "WARNING: No bone matrices provided for animation" << std::endl;
+        return;
+    }
+    
+    std::cout << "DEBUG: Processing " << meshes.size() << " meshes for animation" << std::endl;
+    
+    // Update all meshes that have animation data
+    for (auto& mesh : meshes) {
+        std::cout << "DEBUG: Mesh hasAnimation=" << mesh.hasAnimation 
+                  << " originalVertices=" << mesh.originalVertices.size() 
+                  << " animatedVertices=" << mesh.animatedVertices.size() << std::endl;
+                  
+        if (!mesh.hasAnimation || mesh.originalVertices.empty() || mesh.animatedVertices.empty()) {
+            std::cout << "DEBUG: Skipping mesh - hasAnimation=" << mesh.hasAnimation 
+                      << " originalEmpty=" << mesh.originalVertices.empty() 
+                      << " animatedEmpty=" << mesh.animatedVertices.empty() << std::endl;
+            continue;
+        }
+        
+        // Safety check: ensure animated vertices vector is the right size
+        if (mesh.animatedVertices.size() != mesh.originalVertices.size()) {
+            std::cout << "ERROR: Animated vertices size mismatch! Original: " << mesh.originalVertices.size() 
+                      << " Animated: " << mesh.animatedVertices.size() << std::endl;
+            return;
+        }
+        
+        // Only print debug info once
+        static bool firstUpdate = true;
+        if (firstUpdate) {
+            std::cout << "Updating mesh with " << mesh.originalVertices.size() << " vertices using " << boneCount << " bones" << std::endl;
+            std::cout << "Processing max " << std::min(mesh.originalVertices.size(), size_t(2000)) << " vertices per frame" << std::endl;
+            firstUpdate = false;
+        }
+        
+        // Process vertices in small batches to reduce CPU load
+        const size_t BATCH_SIZE = 500; // Smaller batches for better performance
+        const size_t MAX_VERTICES_PER_FRAME = 2000; // Limit vertices processed per frame
+        
+        for (size_t startIdx = 0; startIdx < std::min(mesh.originalVertices.size(), MAX_VERTICES_PER_FRAME); startIdx += BATCH_SIZE) {
+            size_t endIdx = std::min({startIdx + BATCH_SIZE, mesh.originalVertices.size(), MAX_VERTICES_PER_FRAME});
+            
+            // Transform vertices using ozz bone matrices
+            for (size_t i = startIdx; i < endIdx; ++i) {
+                if (i >= mesh.originalVertices.size() || i >= mesh.animatedVertices.size()) {
+                    std::cout << "ERROR: Vertex index " << i << " out of bounds!" << std::endl;
+                    continue;
+                }
+                
+                const auto& origVertex = mesh.originalVertices[i];
+                auto& animVertex = mesh.animatedVertices[i];
+                
+                // Start with the original vertex
+                animVertex = origVertex;
+                
+                // For now, try a simpler approach - just copy the original vertex without transformation
+                // This will keep the character in T-pose but verify the system is working
+                // TODO: Implement proper bone transformation once we debug the deformation
+                animVertex = origVertex;
+                continue;
+                
+                // Apply skinning transformation (disabled for now)
+                /*
+                float finalPosition[3] = {0.0f, 0.0f, 0.0f};
+                float finalNormal[3] = {0.0f, 0.0f, 0.0f};
+                
+                for (int j = 0; j < 4; ++j) {
+                    uint8_t boneIndex = origVertex.boneIndices[j];
+                    float weight = origVertex.boneWeights[j];
+                    
+                    if (weight == 0.0f || boneIndex >= boneCount) {
+                        if (boneIndex >= boneCount && weight > 0.0f) {
+                            std::cout << "WARNING: Bone index " << (int)boneIndex << " >= bone count " << boneCount << std::endl;
+                        }
+                        continue;
+                    }
+                    
+                    // Get bone matrix (16 floats in column-major order)
+                    const float* boneMatrix = &boneMatrices[boneIndex * 16];
+                    
+                    // Transform position
+                    float transformedPos[3];
+                    transformedPos[0] = boneMatrix[0] * origVertex.position[0] + boneMatrix[4] * origVertex.position[1] + boneMatrix[8] * origVertex.position[2] + boneMatrix[12];
+                    transformedPos[1] = boneMatrix[1] * origVertex.position[0] + boneMatrix[5] * origVertex.position[1] + boneMatrix[9] * origVertex.position[2] + boneMatrix[13];
+                    transformedPos[2] = boneMatrix[2] * origVertex.position[0] + boneMatrix[6] * origVertex.position[1] + boneMatrix[10] * origVertex.position[2] + boneMatrix[14];
+                    
+                    // Unpack normal from uint32_t (RGBA8 format)
+                    float origNormal[3];
+                    origNormal[0] = ((origVertex.normal >> 0) & 0xFF) / 255.0f * 2.0f - 1.0f;
+                    origNormal[1] = ((origVertex.normal >> 8) & 0xFF) / 255.0f * 2.0f - 1.0f;
+                    origNormal[2] = ((origVertex.normal >> 16) & 0xFF) / 255.0f * 2.0f - 1.0f;
+                    
+                    // Transform normal (no translation component)
+                    float transformedNormal[3];
+                    transformedNormal[0] = boneMatrix[0] * origNormal[0] + boneMatrix[4] * origNormal[1] + boneMatrix[8] * origNormal[2];
+                    transformedNormal[1] = boneMatrix[1] * origNormal[0] + boneMatrix[5] * origNormal[1] + boneMatrix[9] * origNormal[2];
+                    transformedNormal[2] = boneMatrix[2] * origNormal[0] + boneMatrix[6] * origNormal[1] + boneMatrix[10] * origNormal[2];
+                    
+                    // Accumulate weighted transformation
+                    finalPosition[0] += transformedPos[0] * weight;
+                    finalPosition[1] += transformedPos[1] * weight;
+                    finalPosition[2] += transformedPos[2] * weight;
+                    
+                    finalNormal[0] += transformedNormal[0] * weight;
+                    finalNormal[1] += transformedNormal[1] * weight;
+                    finalNormal[2] += transformedNormal[2] * weight;
+                }
+                
+                // Set final transformed vertex position
+                animVertex.position[0] = finalPosition[0];
+                animVertex.position[1] = finalPosition[1];
+                animVertex.position[2] = finalPosition[2];
+                
+                // Normalize final normal
+                float normalLength = sqrtf(finalNormal[0] * finalNormal[0] + 
+                                         finalNormal[1] * finalNormal[1] + 
+                                         finalNormal[2] * finalNormal[2]);
+                if (normalLength > 0.0f) {
+                    finalNormal[0] /= normalLength;
+                    finalNormal[1] /= normalLength;
+                    finalNormal[2] /= normalLength;
+                }
+                
+                // Pack final normal back to uint32_t (RGBA8 format)
+                uint8_t nx = (uint8_t)((finalNormal[0] * 0.5f + 0.5f) * 255.0f);
+                uint8_t ny = (uint8_t)((finalNormal[1] * 0.5f + 0.5f) * 255.0f);
+                uint8_t nz = (uint8_t)((finalNormal[2] * 0.5f + 0.5f) * 255.0f);
+                animVertex.normal = nx | (ny << 8) | (nz << 16) | (0xFF << 24);
+                */
+            }
+        }
+        
+        // Update the vertex buffer with transformed vertices
+        if (mesh.vertexBuffer.idx != bgfx::kInvalidHandle) {
+            bgfx::destroy(mesh.vertexBuffer);
+        }
+        
+        mesh.vertexBuffer = bgfx::createVertexBuffer(
+            bgfx::makeRef(mesh.animatedVertices.data(), 
+                         mesh.animatedVertices.size() * sizeof(PosNormalTexcoordVertex)),
+            PosNormalTexcoordVertex::ms_layout
+        );
     }
 }

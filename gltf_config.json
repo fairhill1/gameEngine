@@ -1,0 +1,11 @@
+{
+  "skeleton": {
+    "filename": "build/assets/mannequin_skeleton.ozz"
+  },
+  "animations": [
+    {
+      "filename": "build/assets/mannequin_animation.ozz",
+      "name": "idle"
+    }
+  ]
+}

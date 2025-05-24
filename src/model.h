@@ -22,6 +22,8 @@ struct PosNormalTexcoordVertex {
     float position[3];
     uint32_t normal;     // Packed normal (RGBA8 format)
     int16_t texcoord[2]; // Normalized texture coordinates
+    uint8_t boneIndices[4]; // Bone indices (up to 4 bones per vertex)
+    float boneWeights[4];    // Bone weights (must sum to 1.0)
 
     static void init() {
         ms_layout
@@ -29,6 +31,8 @@ struct PosNormalTexcoordVertex {
             .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
             .add(bgfx::Attrib::Normal, 4, bgfx::AttribType::Uint8, true, true)
             .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Int16, true, true)
+            .add(bgfx::Attrib::Indices, 4, bgfx::AttribType::Uint8)
+            .add(bgfx::Attrib::Weight, 4, bgfx::AttribType::Float)
             .end();
     }
 
@@ -112,6 +116,9 @@ public:
     
     // Set a fallback texture to use when meshes don't have their own texture
     void setFallbackTexture(bgfx::TextureHandle texture) { fallbackTexture = texture; }
+    
+    // Update model vertices with ozz animation bone matrices  
+    void updateWithOzzBoneMatrices(const float* boneMatrices, size_t boneCount);
     
     // Animation support
     bool hasAnimations() const { return !animations.empty(); }
